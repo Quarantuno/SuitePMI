@@ -1,0 +1,20 @@
+{
+  "name": "suite-pmi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Suite all-in-one per PMI italiane",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @suite/api db:migrate",
+    "db:generate": "pnpm --filter @suite/api db:generate",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @suite/shared build && pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

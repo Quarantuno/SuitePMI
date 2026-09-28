@@ -1,0 +1,706 @@
+{
+  "id": "5a4c7890-46b5-4e64-9c6f-5ff9c32e947c",
+  "prevId": "2d51ce3a-2d1b-4857-9793-75c4d6f4860d",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.aziende": {
+      "name": "aziende",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "ragione_sociale": {
+          "name": "ragione_sociale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "partita_iva": {
+          "name": "partita_iva",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "aziende_partita_iva_unique": {
+          "name": "aziende_partita_iva_unique",
+          "columns": [
+            "partita_iva"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.controparti": {
+      "name": "controparti",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "azienda_id": {
+          "name": "azienda_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cliente'"
+        },
+        "denominazione": {
+          "name": "denominazione",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "partita_iva": {
+          "name": "partita_iva",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codice_fiscale": {
+          "name": "codice_fiscale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pec": {
+          "name": "pec",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telefono": {
+          "name": "telefono",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "indirizzo": {
+          "name": "indirizzo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "controparti_azienda_idx": {
+          "name": "controparti_azienda_idx",
+          "columns": [
+            {
+              "expression": "azienda_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "controparti_piva_uq": {
+          "name": "controparti_piva_uq",
+          "columns": [
+            {
+              "expression": "azienda_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "partita_iva",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"controparti\".\"partita_iva\" is not null",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "controparti_azienda_id_aziende_id_fk": {
+          "name": "controparti_azienda_id_aziende_id_fk",
+          "tableFrom": "controparti",
+          "columnsFrom": [
+            "azienda_id"
+          ],
+          "tableTo": "aziende",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.fatture": {
+      "name": "fatture",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "azienda_id": {
+          "name": "azienda_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "controparte_id": {
+          "name": "controparte_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "direzione": {
+          "name": "direzione",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "numero": {
+          "name": "numero",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_emissione": {
+          "name": "data_emissione",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "totale_cents": {
+          "name": "totale_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origine": {
+          "name": "origine",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manuale'"
+        },
+        "xml_originale": {
+          "name": "xml_originale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "fatture_azienda_idx": {
+          "name": "fatture_azienda_idx",
+          "columns": [
+            {
+              "expression": "azienda_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "fatture_numero_uq": {
+          "name": "fatture_numero_uq",
+          "columns": [
+            {
+              "expression": "azienda_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "direzione",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "controparte_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "numero",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "data_emissione",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "fatture_azienda_id_aziende_id_fk": {
+          "name": "fatture_azienda_id_aziende_id_fk",
+          "tableFrom": "fatture",
+          "columnsFrom": [
+            "azienda_id"
+          ],
+          "tableTo": "aziende",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "fatture_controparte_id_controparti_id_fk": {
+          "name": "fatture_controparte_id_controparti_id_fk",
+          "tableFrom": "fatture",
+          "columnsFrom": [
+            "controparte_id"
+          ],
+          "tableTo": "controparti",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.membri": {
+      "name": "membri",
+      "schema": "",
+      "columns": {
+        "azienda_id": {
+          "name": "azienda_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "utente_id": {
+          "name": "utente_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ruolo": {
+          "name": "ruolo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'membro'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "membri_azienda_id_aziende_id_fk": {
+          "name": "membri_azienda_id_aziende_id_fk",
+          "tableFrom": "membri",
+          "columnsFrom": [
+            "azienda_id"
+          ],
+          "tableTo": "aziende",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "membri_utente_id_utenti_id_fk": {
+          "name": "membri_utente_id_utenti_id_fk",
+          "tableFrom": "membri",
+          "columnsFrom": [
+            "utente_id"
+          ],
+          "tableTo": "utenti",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "membri_azienda_id_utente_id_pk": {
+          "name": "membri_azienda_id_utente_id_pk",
+          "columns": [
+            "azienda_id",
+            "utente_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pagamenti": {
+      "name": "pagamenti",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "azienda_id": {
+          "name": "azienda_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scadenza_id": {
+          "name": "scadenza_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "importo_cents": {
+          "name": "importo_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "pagamenti_scadenza_idx": {
+          "name": "pagamenti_scadenza_idx",
+          "columns": [
+            {
+              "expression": "scadenza_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "pagamenti_azienda_id_aziende_id_fk": {
+          "name": "pagamenti_azienda_id_aziende_id_fk",
+          "tableFrom": "pagamenti",
+          "columnsFrom": [
+            "azienda_id"
+          ],
+          "tableTo": "aziende",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "pagamenti_scadenza_id_scadenze_id_fk": {
+          "name": "pagamenti_scadenza_id_scadenze_id_fk",
+          "tableFrom": "pagamenti",
+          "columnsFrom": [
+            "scadenza_id"
+          ],
+          "tableTo": "scadenze",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.scadenze": {
+      "name": "scadenze",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "azienda_id": {
+          "name": "azienda_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fattura_id": {
+          "name": "fattura_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_scadenza": {
+          "name": "data_scadenza",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "importo_cents": {
+          "name": "importo_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "scadenze_fattura_idx": {
+          "name": "scadenze_fattura_idx",
+          "columns": [
+            {
+              "expression": "fattura_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "scadenze_data_idx": {
+          "name": "scadenze_data_idx",
+          "columns": [
+            {
+              "expression": "azienda_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "data_scadenza",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "scadenze_azienda_id_aziende_id_fk": {
+          "name": "scadenze_azienda_id_aziende_id_fk",
+          "tableFrom": "scadenze",
+          "columnsFrom": [
+            "azienda_id"
+          ],
+          "tableTo": "aziende",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "scadenze_fattura_id_fatture_id_fk": {
+          "name": "scadenze_fattura_id_fatture_id_fk",
+          "tableFrom": "scadenze",
+          "columnsFrom": [
+            "fattura_id"
+          ],
+          "tableTo": "fatture",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.utenti": {
+      "name": "utenti",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "utenti_email_unique": {
+          "name": "utenti_email_unique",
+          "columns": [
+            "email"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
