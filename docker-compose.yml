@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: suite
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Crea il ruolo applicativo (non superuser) al primo avvio
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+
+volumes:
+  db-data:
