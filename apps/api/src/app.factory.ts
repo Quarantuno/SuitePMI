@@ -6,8 +6,8 @@ import { config } from './config';
 export function configureApp(app: INestApplication) {
   const express = app as NestExpressApplication;
   express.setGlobalPrefix('api');
-  // Le fatture XML possono pesare qualche MB.
-  express.useBodyParser('json', { limit: '6mb' });
+  // Le fatture XML/p7m (in base64) possono pesare qualche MB.
+  express.useBodyParser('json', { limit: '10mb' });
   express.enableCors({ origin: config.webOrigin });
   express.enableShutdownHooks();
   return express;

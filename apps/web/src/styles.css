@@ -283,3 +283,6 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 .tabs.compact { margin: 0; border: none; }
 .refetching { opacity: 0.6; transition: opacity 0.2s; }
 .kpi-note .inline-form input { width: 120px; }
+.import-summary { margin: 12px 0 0; font-weight: 600; }
+.import-results { max-height: 320px; overflow-y: auto; }
+.import-results .gia, .import-results .ignorati { background: var(--surface-2); color: var(--muted); }

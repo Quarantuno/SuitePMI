@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   fatturaCreateSchema,
   importXmlSchema,
@@ -10,6 +21,7 @@ import {
 import { CurrentUser, type SessionUser } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
 import { FattureService } from './fatture.service';
+import { decodificaXml, estraiDaP7m, P7mError } from './p7m';
 
 @Controller('fatture')
 export class FattureController {
@@ -28,7 +40,16 @@ export class FattureController {
 
   @Post('import-xml')
   importXml(@CurrentUser() user: SessionUser, @Body(new ZodPipe(importXmlSchema)) body: ImportXmlInput) {
-    return this.service.importXml(user.aziendaId, body.xml);
+    let xml = body.xml;
+    if (body.p7mBase64) {
+      try {
+        xml = decodificaXml(estraiDaP7m(Buffer.from(body.p7mBase64, 'base64')));
+      } catch (err) {
+        if (err instanceof P7mError) throw new BadRequestException(err.message);
+        throw err;
+      }
+    }
+    return this.service.importXml(user.aziendaId, xml!);
   }
 
   @Get(':id')

@@ -82,10 +82,14 @@ export const fatturaCreateSchema = z.object({
 });
 export type FatturaCreateInput = z.infer<typeof fatturaCreateSchema>;
 
-export const importXmlSchema = z.object({
-  xml: z.string().min(1).max(5_000_000),
-  nomeFile: z.string().optional(),
-});
+/** Una fattura: XML in chiaro oppure busta firmata .p7m codificata in base64. */
+export const importXmlSchema = z
+  .object({
+    xml: z.string().min(1).max(5_000_000).optional(),
+    p7mBase64: z.string().min(1).max(8_000_000).optional(),
+    nomeFile: z.string().optional(),
+  })
+  .refine((v) => !!v.xml !== !!v.p7mBase64, 'Indica il contenuto XML oppure il file .p7m');
 export type ImportXmlInput = z.infer<typeof importXmlSchema>;
 
 export const pagamentoSchema = z.object({

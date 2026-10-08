@@ -29,7 +29,9 @@ pnpm db:migrate     # crea tabelle e policy di sicurezza
 pnpm dev            # API su :3000, web su http://localhost:5173
 ```
 
-Apri http://localhost:5173, registra la tua azienda e importa un XML da **Fatture**.
+Apri http://localhost:5173, registra la tua azienda e importa le fatture da **Fatture**:
+file XML, firmati `.p7m` (DER, BER o base64) oppure interi archivi `.zip` come quelli
+scaricati dal cassetto fiscale (i file di metadati `_MT_` vengono ignorati).
 Un file di prova e in `apps/api/test/fixtures/fattura-attiva.xml`: funziona se ti
 registri con la partita IVA `12345678903`.
 
@@ -50,7 +52,7 @@ apps/
       common/          guard JWT, validazione Zod, errori Postgres
       auth/            registrazione, login, /me
       controparti/     clienti e fornitori
-      fatture/         fatture, rate, pagamenti, parser FatturaPA
+      fatture/         fatture, rate, pagamenti, parser FatturaPA, estrazione .p7m
       incassi/         crediti scaduti con interessi e indennizzi
       azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
       solleciti/       bozze, PDF della lettera, invio email/PEC, storico
@@ -148,7 +150,7 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET/POST | `/controparti` | Elenco (`?q=`, `?tipo=`) e creazione |
 | GET/PATCH/DELETE | `/controparti/:id` | Dettaglio, modifica, eliminazione |
 | GET/POST | `/fatture` | Elenco (`?direzione=attiva\|passiva`) e fattura manuale |
-| POST | `/fatture/import-xml` | Import FatturaPA (`{ "xml": "..." }`) |
+| POST | `/fatture/import-xml` | Import FatturaPA (`{ "xml": "..." }` oppure `{ "p7mBase64": "..." }`) |
 | GET/DELETE | `/fatture/:id` | Dettaglio ed eliminazione |
 | POST | `/scadenze/:id/pagamenti` | Registra un incasso o pagamento |
 | GET | `/incassi/crediti-scaduti?alla=AAAA-MM-GG` | Crediti, interessi, indennizzi, ultimo sollecito |
