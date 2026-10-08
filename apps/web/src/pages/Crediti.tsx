@@ -1,5 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { formatBps, formatData, formatEuro, todayIso, type CreditiScadutiResponse, type RigaCredito } from '@suite/shared';
+import {
+  ETICHETTA_LIVELLO,
+  formatBps,
+  formatData,
+  formatEuro,
+  todayIso,
+  type CreditiScadutiResponse,
+  type RigaCredito,
+} from '@suite/shared';
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
@@ -101,6 +109,8 @@ export function Crediti() {
                   <th className="r">Interessi</th>
                   <th className="r">Indennizzi</th>
                   <th className="r">Totale</th>
+                  <th>Ultimo sollecito</th>
+                  <th aria-label="Azioni" />
                 </tr>
               </thead>
               <tbody>
@@ -119,6 +129,21 @@ export function Crediti() {
                     </td>
                     <td className="r">
                       <Money cents={c.totaleCents} strong />
+                    </td>
+                    <td className="small">
+                      {c.ultimoSollecito ? (
+                        <>
+                          {ETICHETTA_LIVELLO[c.ultimoSollecito.livello]}
+                          <div className="muted">{formatData(c.ultimoSollecito.inviatoIl)}</div>
+                        </>
+                      ) : (
+                        <span className="muted">Nessuno</span>
+                      )}
+                    </td>
+                    <td className="r">
+                      <Link className="btn btn-secondary" to={`/solleciti/nuovo?cliente=${c.controparteId}&alla=${alla}`}>
+                        Sollecita
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -187,7 +212,7 @@ export function Crediti() {
             </table>
             <p className="muted small footnote">
               Interessi semplici su base 365 giorni, dal giorno successivo alla scadenza, al tasso del semestre in cui
-              matura ciascun giorno di ritardo. Il calcolo e indicativo: verifica sempre con il tuo consulente prima di
+              matura ciascun giorno di ritardo. Il calcolo è indicativo: verifica sempre con il tuo consulente prima di
               inviare una diffida.
             </p>
           </section>

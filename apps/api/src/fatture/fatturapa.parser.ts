@@ -114,10 +114,10 @@ export function parseFatturaPA(xml: string): FatturaPAParsed {
   try {
     doc = parser.parse(xml);
   } catch {
-    throw new FatturaPAError('Il file non e un XML valido');
+    throw new FatturaPAError('Il file non è un XML valido');
   }
   const root = obj(path(doc, 'FatturaElettronica'));
-  if (!root) throw new FatturaPAError('Il file non e una FatturaPA (manca FatturaElettronica)');
+  if (!root) throw new FatturaPAError('Il file non è una FatturaPA (manca FatturaElettronica)');
 
   const avvisi: string[] = [];
   const header = obj(root.FatturaElettronicaHeader);

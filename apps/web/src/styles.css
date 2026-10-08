@@ -200,3 +200,34 @@ input[aria-invalid='true'] { border-color: var(--danger); }
 }
 .auth-card .brand { padding: 0; margin-bottom: 6px; }
 .auth-card p { margin: 0; }
+
+/* Solleciti */
+.segmented { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.segmented button {
+  font: inherit; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+}
+.segmented button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.alert-warn { background: var(--warn-soft); color: var(--warn); list-style: none; }
+.alert-warn li + li { margin-top: 4px; }
+ul.alert { padding: 10px 14px; }
+.totals { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 8px; }
+.totals > div { display: flex; flex-direction: column; gap: 2px; }
+.letter-editor { display: flex; flex-direction: column; gap: 14px; }
+textarea {
+  font: inherit; font-size: 0.95rem; line-height: 1.55; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; resize: vertical; min-height: 240px;
+}
+textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.letter { max-width: 760px; }
+.letter-subject { font-weight: 600; margin: 0 0 14px; }
+.letter-body { white-space: pre-wrap; line-height: 1.6; }
+.send-row { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 16px; align-items: end; }
+.send-row p { margin: 0 0 10px; }
+@media (max-width: 800px) { .send-row { grid-template-columns: 1fr; } }
+.grid-2 { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+.form-actions { gap: 12px; align-items: center; }
+.saved { color: var(--ok); }
+a.btn { text-decoration: none; display: inline-block; }
+input:disabled { color: var(--muted); background: var(--surface-2); }

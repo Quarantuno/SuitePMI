@@ -54,7 +54,7 @@ function ImportXml({ onDone }: { onDone: () => void }) {
       <div className="card-row">
         <div>
           <h2>Importa fatture elettroniche</h2>
-          <p className="muted small">File XML FatturaPA (anche piu di uno). Riconosciamo da soli se sono fatture emesse o ricevute.</p>
+          <p className="muted small">File XML FatturaPA (anche più di uno). Riconosciamo da soli se sono fatture emesse o ricevute.</p>
         </div>
         <Button onClick={() => input.current?.click()} disabled={inCorso}>
           {inCorso ? 'Importazione…' : 'Scegli file XML'}
@@ -105,7 +105,7 @@ function NuovaFattura({ onDone }: { onDone: () => void }) {
   return (
     <form className="card" onSubmit={submit}>
       <h2>Nuova fattura manuale</h2>
-      <p className="muted small">Scadenza unica a 30 giorni, il termine legale se non ne e stato concordato un altro.</p>
+      <p className="muted small">Scadenza unica a 30 giorni, il termine legale se non ne è stato concordato un altro.</p>
       <div className="grid-4">
         <Select
           label="Cliente"

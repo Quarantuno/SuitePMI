@@ -24,6 +24,11 @@ export const aziende = pgTable('aziende', {
   id: uuid('id').primaryKey().defaultRandom(),
   ragioneSociale: text('ragione_sociale').notNull(),
   partitaIva: text('partita_iva').notNull().unique(),
+  // Dati usati nelle lettere e nei solleciti
+  indirizzo: text('indirizzo'),
+  email: text('email'),
+  pec: text('pec'),
+  iban: text('iban'),
   createdAt: createdAt(),
 });
 
@@ -134,10 +139,44 @@ export const pagamenti = pgTable(
   (t) => [index('pagamenti_scadenza_idx').on(t.scadenzaId)],
 );
 
+export const solleciti = pgTable(
+  'solleciti',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    controparteId: uuid('controparte_id')
+      .notNull()
+      .references(() => controparti.id, { onDelete: 'restrict' }),
+    livello: text('livello', { enum: ['promemoria', 'sollecito', 'diffida'] }).notNull(),
+    stato: text('stato', { enum: ['bozza', 'inviato'] }).notNull().default('bozza'),
+    /** Data a cui sono calcolati importi e interessi. */
+    alla: date('alla', { mode: 'string' }).notNull(),
+    oggetto: text('oggetto').notNull(),
+    testo: text('testo').notNull(),
+    // Fotografia degli importi al momento della lettera
+    capitaleCents: cents('capitale_cents').notNull(),
+    interessiCents: cents('interessi_cents').notNull(),
+    indennizziCents: cents('indennizzi_cents').notNull(),
+    totaleCents: cents('totale_cents').notNull(),
+    scadenzeIds: uuid('scadenze_ids').array().notNull(),
+    canale: text('canale', { enum: ['email', 'pec', 'manuale'] }),
+    destinatario: text('destinatario'),
+    inviatoIl: date('inviato_il', { mode: 'string' }),
+    creatoDa: uuid('creato_da').references(() => utenti.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('solleciti_controparte_idx').on(t.aziendaId, t.controparteId)],
+);
+
 // --- Relazioni (per le query relazionali di Drizzle) ------------------------
 
 export const contropartiRelations = relations(controparti, ({ many }) => ({
   fatture: many(fatture),
+  solleciti: many(solleciti),
+}));
+
+export const sollecitiRelations = relations(solleciti, ({ one }) => ({
+  controparte: one(controparti, { fields: [solleciti.controparteId], references: [controparti.id] }),
 }));
 
 export const fattureRelations = relations(fatture, ({ one, many }) => ({

@@ -24,6 +24,6 @@ export default async function setup() {
 
   const db = new Client({ connectionString: ADMIN_URL });
   await db.connect();
-  await db.query('truncate pagamenti, scadenze, fatture, controparti, membri, utenti, aziende cascade');
+  await db.query('truncate solleciti, pagamenti, scadenze, fatture, controparti, membri, utenti, aziende cascade');
   await db.end();
 }

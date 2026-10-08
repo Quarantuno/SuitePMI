@@ -1,4 +1,9 @@
-const euro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+// useGrouping 'always': "1.220,00 €" anche con 4 cifre, uguale in Node e nel browser.
+const euro = new Intl.NumberFormat('it-IT', {
+  style: 'currency',
+  currency: 'EUR',
+  useGrouping: 'always',
+});
 
 export function formatEuro(cents: number): string {
   return euro.format(cents / 100);

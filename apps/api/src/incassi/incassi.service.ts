@@ -8,9 +8,9 @@ import {
   type RiepilogoCliente,
   type RigaCredito,
 } from '@suite/shared';
-import { and, eq, inArray, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import { DbService } from '../db/db.service';
-import { controparti, fatture, pagamenti, scadenze } from '../db/schema';
+import { controparti, fatture, pagamenti, scadenze, solleciti } from '../db/schema';
 
 @Injectable()
 export class IncassiService {
@@ -21,14 +21,24 @@ export class IncassiService {
    * - rate ancora da incassare (stato "scaduto");
    * - rate incassate in ritardo, su cui restano da chiedere gli interessi ("pagato_in_ritardo").
    */
-  creditiScaduti(aziendaId: string, alla: IsoDate = todayIso()): Promise<CreditiScadutiResponse> {
+  creditiScaduti(
+    aziendaId: string,
+    alla: IsoDate = todayIso(),
+    controparteId?: string,
+  ): Promise<CreditiScadutiResponse> {
     return this.dbs.withTenant(aziendaId, async (tx) => {
       const rows = await tx
         .select({ scadenza: scadenze, fattura: fatture, controparte: controparti })
         .from(scadenze)
         .innerJoin(fatture, eq(fatture.id, scadenze.fatturaId))
         .innerJoin(controparti, eq(controparti.id, fatture.controparteId))
-        .where(and(eq(fatture.direzione, 'attiva'), lt(scadenze.dataScadenza, alla)));
+        .where(
+          and(
+            eq(fatture.direzione, 'attiva'),
+            lt(scadenze.dataScadenza, alla),
+            controparteId ? eq(fatture.controparteId, controparteId) : undefined,
+          ),
+        );
 
       const ids = rows.map((r) => r.scadenza.id);
       const tuttiPagamenti = ids.length
@@ -85,6 +95,19 @@ export class IncassiService {
       // Indennizzo forfettario di 40 euro: uno per fattura, solo tra imprese.
       const fattureConIndennizzo = new Set(righe.filter((r) => r.applicaInteressi).map((r) => r.fatturaId));
 
+      // Ultimo sollecito inviato per ciascuna controparte
+      const inviati = await tx
+        .select({ controparteId: solleciti.controparteId, livello: solleciti.livello, inviatoIl: solleciti.inviatoIl })
+        .from(solleciti)
+        .where(eq(solleciti.stato, 'inviato'))
+        .orderBy(desc(solleciti.inviatoIl), desc(solleciti.createdAt));
+      const ultimo = new Map<string, RiepilogoCliente['ultimoSollecito']>();
+      for (const s of inviati) {
+        if (!ultimo.has(s.controparteId) && s.inviatoIl) {
+          ultimo.set(s.controparteId, { livello: s.livello, inviatoIl: s.inviatoIl });
+        }
+      }
+
       const clienti = new Map<string, RiepilogoCliente & { _fatture: Set<string> }>();
       for (const r of righe) {
         const c = clienti.get(r.controparte.id) ?? {
@@ -95,6 +118,7 @@ export class IncassiService {
           interessiCents: 0,
           indennizziCents: 0,
           totaleCents: 0,
+          ultimoSollecito: ultimo.get(r.controparte.id) ?? null,
           _fatture: new Set<string>(),
         };
         c.residuoCents += r.residuoCents;

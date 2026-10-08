@@ -1,9 +1,10 @@
 # Suite PMI
 
-Piattaforma all-in-one per le PMI italiane. Questa prima versione contiene il **nucleo**
-(account, aziende, isolamento dei dati, anagrafiche) e il **modulo Incassi**:
-import delle fatture elettroniche FatturaPA, scadenze, incassi e calcolo degli
-interessi di mora secondo il d.lgs. 231/2002.
+Piattaforma all-in-one per le PMI italiane. Contiene il **nucleo**
+(account, aziende, isolamento dei dati, anagrafiche), il **modulo Incassi**
+(import delle fatture elettroniche FatturaPA, scadenze, incassi e calcolo degli
+interessi di mora secondo il d.lgs. 231/2002) e il **modulo Solleciti**
+(promemoria, sollecito formale e diffida, con PDF e invio via email o PEC).
 
 ## Stack
 
@@ -22,7 +23,7 @@ Prerequisiti: **Node 22+**, **Docker Desktop** e **pnpm** (`corepack enable` lo 
 ```bash
 pnpm install
 cp .env.example .env
-pnpm db:up          # avvia Postgres in Docker (porta 5432)
+pnpm db:up          # avvia Postgres (porta 5432) e Mailpit (http://localhost:8025) in Docker
 pnpm db:migrate     # crea tabelle e policy di sicurezza
 pnpm dev            # API su :3000, web su http://localhost:5173
 ```
@@ -50,9 +51,11 @@ apps/
       controparti/     clienti e fornitori
       fatture/         fatture, rate, pagamenti, parser FatturaPA
       incassi/         crediti scaduti con interessi e indennizzi
+      azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
+      solleciti/       bozze, PDF della lettera, invio email/PEC, storico
     test/              test end-to-end + fattura XML di esempio
   web/                 React
-    src/pages/         Crediti, Fatture, Clienti, Accesso
+    src/pages/         Crediti, Solleciti, Fatture, Clienti, Impostazioni, Accesso
 packages/
   shared/              logica e tipi condivisi (usati da API e web)
 ```
@@ -93,6 +96,31 @@ Il calcolo e in `packages/shared/src/interessi-mora.ts`, coperto da test:
 `packages/shared/src/tassi-mora.ts` (il MEF lo pubblica a gennaio e luglio).
 Se manca, l'API risponde con un errore esplicito invece di calcolare male.
 
+## Solleciti
+
+Dalla pagina **Crediti scaduti** clicchi **Sollecita** accanto a un cliente:
+
+1. L'app consiglia il livello in base allo storico: promemoria, poi sollecito formale
+   (dopo almeno 7 giorni), poi diffida e messa in mora (dopo almeno 10). Con oltre
+   60 giorni di ritardo e nessun contatto parte direttamente dal sollecito.
+2. Il testo è generato da `packages/shared/src/solleciti.ts` ed è modificabile.
+   La diffida chiede capitale, interessi di mora (anche su fatture pagate in ritardo)
+   e 40 euro per fattura, vale come costituzione in mora (art. 1219 c.c.) e
+   interrompe la prescrizione (art. 2943 c.c.). Verso i consumatori (controparti
+   senza partita IVA) i riferimenti al d.lgs. 231/2002 vengono omessi.
+3. Salvi la bozza, scarichi il PDF e la invii via **email** o **PEC** (con il PDF
+   allegato), oppure la segni come inviata se l'hai spedita per raccomandata o dalla
+   tua casella PEC. Gli importi vengono fotografati al momento della lettera.
+
+Compila prima **Impostazioni** (indirizzo, email, PEC, IBAN): compaiono
+nell'intestazione e nelle coordinate di pagamento.
+
+**Email e PEC in locale** finiscono in Mailpit: apri http://localhost:8025 per
+vederle. In produzione configura `SMTP_*` con il tuo provider e `PEC_SMTP_*` con
+l'SMTP del gestore PEC (senza `PEC_SMTP_HOST` l'invio PEC è disattivato). Nota:
+una PEC ha valore legale solo se parte da una casella PEC vera; per ora la
+casella è unica per tutta l'installazione (vedi prossimi passi).
+
 ## API
 
 Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e login.
@@ -108,11 +136,18 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | POST | `/fatture/import-xml` | Import FatturaPA (`{ "xml": "..." }`) |
 | GET/DELETE | `/fatture/:id` | Dettaglio ed eliminazione |
 | POST | `/scadenze/:id/pagamenti` | Registra un incasso o pagamento |
-| GET | `/incassi/crediti-scaduti?alla=AAAA-MM-GG` | Crediti, interessi, indennizzi |
+| GET | `/incassi/crediti-scaduti?alla=AAAA-MM-GG` | Crediti, interessi, indennizzi, ultimo sollecito |
+| GET/PATCH | `/azienda` | Dati dell'azienda (indirizzo, email, PEC, IBAN) |
+| POST | `/solleciti/anteprima` | Testo proposto e livello consigliato per un cliente |
+| GET/POST | `/solleciti` | Storico (`?controparteId=`) e salvataggio bozza |
+| GET/DELETE | `/solleciti/:id` | Dettaglio ed eliminazione (solo bozze) |
+| GET | `/solleciti/:id/pdf` | Lettera in PDF |
+| POST | `/solleciti/:id/invia` | Invio email/PEC o registrazione di un invio manuale |
 
 ## Prossimi passi tecnici
 
-- Solleciti: modelli email/PEC progressivi e generazione della diffida in PDF.
+- Casella PEC e SMTP per singola azienda (oggi sono globali), con ricevute di accettazione e consegna.
+- Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, piu aziende per utente.
 - Note di credito (TD04) e fatture in lotto.

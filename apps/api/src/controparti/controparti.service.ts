@@ -25,7 +25,7 @@ export function toControparte(r: Row): Controparte {
 
 function conflitto(err: unknown): never {
   if (pgErrorCode(err) === UNIQUE_VIOLATION) {
-    throw new ConflictException('Esiste gia una controparte con questa partita IVA');
+    throw new ConflictException('Esiste già una controparte con questa partita IVA');
   }
   throw err;
 }
