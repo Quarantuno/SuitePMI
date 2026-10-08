@@ -4,3 +4,4 @@ export * from './interessi-mora';
 export * from './schemas';
 export * from './types';
 export * from './format';
+export * from './solleciti';

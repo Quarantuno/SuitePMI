@@ -15,6 +15,20 @@
       "when": 1790537783709,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790680924749,
+      "tag": "0002_solleciti",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790680925857,
+      "tag": "0003_solleciti_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -71,6 +71,8 @@ export interface RiepilogoCliente {
   interessiCents: number;
   indennizziCents: number;
   totaleCents: number;
+  /** Ultimo sollecito inviato a questa controparte, se c'e. */
+  ultimoSollecito: { livello: 'promemoria' | 'sollecito' | 'diffida'; inviatoIl: IsoDate } | null;
 }
 
 export interface CreditiScadutiResponse {
@@ -89,5 +91,51 @@ export interface CreditiScadutiResponse {
 export interface ImportXmlResponse {
   fattura: Fattura;
   controparteCreata: boolean;
+  avvisi: string[];
+}
+
+export interface Azienda {
+  id: string;
+  ragioneSociale: string;
+  partitaIva: string;
+  indirizzo: string | null;
+  email: string | null;
+  pec: string | null;
+  iban: string | null;
+}
+
+export type LivelloSollecitoApi = 'promemoria' | 'sollecito' | 'diffida';
+export type CanaleSollecito = 'email' | 'pec' | 'manuale';
+
+export interface Sollecito {
+  id: string;
+  controparte: { id: string; denominazione: string };
+  livello: LivelloSollecitoApi;
+  stato: 'bozza' | 'inviato';
+  alla: IsoDate;
+  oggetto: string;
+  testo: string;
+  capitaleCents: number;
+  interessiCents: number;
+  indennizziCents: number;
+  totaleCents: number;
+  canale: CanaleSollecito | null;
+  destinatario: string | null;
+  inviatoIl: IsoDate | null;
+  createdAt: string;
+}
+
+export interface AnteprimaSollecito {
+  controparte: { id: string; denominazione: string; email: string | null; pec: string | null };
+  livello: LivelloSollecitoApi;
+  suggerito: { livello: LivelloSollecitoApi; motivo: string };
+  alla: IsoDate;
+  oggetto: string;
+  testo: string;
+  capitaleCents: number;
+  interessiCents: number;
+  indennizziCents: number;
+  totaleCents: number;
+  /** Dati mancanti che conviene completare (es. IBAN, PEC del cliente). */
   avvisi: string[];
 }

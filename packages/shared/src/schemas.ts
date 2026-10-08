@@ -98,3 +98,69 @@ export type PagamentoInput = z.infer<typeof pagamentoSchema>;
 export const creditiQuerySchema = z.object({
   alla: isoDate.optional(),
 });
+
+// --- Azienda -----------------------------------------------------------------
+
+/** IBAN con verifica del codice di controllo (ISO 13616, modulo 97). */
+export function isIbanValido(value: string): boolean {
+  const iban = value.replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+  if (iban.startsWith('IT') && iban.length !== 27) return false;
+  const riordinato = iban.slice(4) + iban.slice(0, 4);
+  let resto = 0;
+  for (const ch of riordinato) {
+    const n = ch >= 'A' ? String(ch.charCodeAt(0) - 55) : ch;
+    for (const d of n) resto = (resto * 10 + Number(d)) % 97;
+  }
+  return resto === 1;
+}
+
+export const iban = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/\s+/g, '').toUpperCase())
+  .refine(isIbanValido, 'IBAN non valido');
+
+/** Stringa vuota = campo cancellato. */
+const opzionale = <T extends z.ZodType>(schema: T) =>
+  z.union([z.literal('').transform(() => null), schema]).optional();
+
+export const aziendaUpdateSchema = z.object({
+  ragioneSociale: z.string().trim().min(1).optional(),
+  indirizzo: opzionale(z.string().trim().min(1)),
+  email: opzionale(z.email()),
+  pec: opzionale(z.email()),
+  iban: opzionale(iban),
+});
+export type AziendaUpdateInput = z.infer<typeof aziendaUpdateSchema>;
+
+// --- Solleciti ---------------------------------------------------------------
+
+export const livelloSollecito = z.enum(['promemoria', 'sollecito', 'diffida']);
+export const canaleSollecito = z.enum(['email', 'pec', 'manuale']);
+
+export const sollecitoAnteprimaSchema = z.object({
+  controparteId: z.uuid(),
+  /** Se assente usiamo il livello suggerito. */
+  livello: livelloSollecito.optional(),
+  alla: isoDate.optional(),
+});
+export type SollecitoAnteprimaInput = z.infer<typeof sollecitoAnteprimaSchema>;
+
+export const sollecitoCreateSchema = z.object({
+  controparteId: z.uuid(),
+  livello: livelloSollecito,
+  alla: isoDate,
+  oggetto: z.string().trim().min(1).max(300),
+  testo: z.string().trim().min(1).max(20_000),
+});
+export type SollecitoCreateInput = z.infer<typeof sollecitoCreateSchema>;
+
+export const sollecitoInviaSchema = z.object({
+  canale: canaleSollecito,
+  /** Obbligatorio per email e PEC se la controparte non ha l'indirizzo in anagrafica. */
+  destinatario: z.email().optional(),
+  /** Per l'invio "manuale" (raccomandata, PEC dal proprio gestore...): data di invio. */
+  inviatoIl: isoDate.optional(),
+});
+export type SollecitoInviaInput = z.infer<typeof sollecitoInviaSchema>;

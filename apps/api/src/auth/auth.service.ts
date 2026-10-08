@@ -38,7 +38,7 @@ export class AuthService {
       return this.session(utente, azienda);
     } catch (err) {
       if (pgErrorCode(err) === UNIQUE_VIOLATION) {
-        throw new ConflictException('Email o partita IVA gia registrate');
+        throw new ConflictException('Email o partita IVA già registrate');
       }
       throw err;
     }

@@ -92,7 +92,7 @@ export function Accesso({ modo }: { modo: 'login' | 'registrazione' }) {
             </>
           ) : (
             <>
-              Hai gia un account? <Link to="/accedi">Accedi</Link>
+              Hai già un account? <Link to="/accedi">Accedi</Link>
             </>
           )}
         </p>

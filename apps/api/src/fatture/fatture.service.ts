@@ -52,7 +52,7 @@ function toFattura(f: FatturaConScadenze): Fattura {
 
 function duplicata(err: unknown): never {
   if (pgErrorCode(err) === UNIQUE_VIOLATION) {
-    throw new ConflictException('Questa fattura e gia stata registrata');
+    throw new ConflictException('Questa fattura è già stata registrata');
   }
   throw err;
 }
@@ -114,7 +114,7 @@ export class FattureService {
 
   /**
    * Importa una FatturaPA. La direzione si deduce dalla partita IVA dell'azienda:
-   * se siamo il cedente e una fattura attiva (da incassare), altrimenti passiva.
+   * se siamo il cedente è una fattura attiva (da incassare), altrimenti passiva.
    */
   async importXml(aziendaId: string, xml: string): Promise<ImportXmlResponse> {
     let parsed;

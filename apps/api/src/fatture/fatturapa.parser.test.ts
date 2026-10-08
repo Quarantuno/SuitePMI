@@ -39,6 +39,6 @@ describe('parseFatturaPA', () => {
 
   it('rifiuta note di credito e file non validi', () => {
     expect(() => parseFatturaPA(xml.replace('TD01', 'TD04'))).toThrow(FatturaPAError);
-    expect(() => parseFatturaPA('<html></html>')).toThrow(/non e una FatturaPA/);
+    expect(() => parseFatturaPA('<html></html>')).toThrow(/non è una FatturaPA/);
   });
 });

@@ -56,7 +56,7 @@ export function Clienti() {
               value={form.partitaIva}
               onChange={set('partitaIva')}
               inputMode="numeric"
-              hint="Senza P.IVA e un consumatore: niente interessi di mora"
+              hint="Senza P.IVA è un consumatore: niente interessi di mora"
               error={fieldError(crea.error, 'partitaIva')}
             />
             <Select label="Tipo" value={form.tipo} onChange={set('tipo')}>

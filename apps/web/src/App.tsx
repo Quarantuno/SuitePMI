@@ -3,6 +3,10 @@ import { useAuth } from './auth';
 import { Clienti } from './pages/Clienti';
 import { Crediti } from './pages/Crediti';
 import { Fatture } from './pages/Fatture';
+import { Impostazioni } from './pages/Impostazioni';
+import { NuovoSollecito } from './pages/NuovoSollecito';
+import { SollecitoDettaglio } from './pages/SollecitoDettaglio';
+import { Solleciti } from './pages/Solleciti';
 import { Accesso } from './pages/Accesso';
 import { Button } from './ui';
 
@@ -24,8 +28,10 @@ function Layout() {
           <NavLink to="/" end>
             Crediti scaduti
           </NavLink>
+          <NavLink to="/solleciti">Solleciti</NavLink>
           <NavLink to="/fatture">Fatture</NavLink>
           <NavLink to="/clienti">Clienti e fornitori</NavLink>
+          <NavLink to="/impostazioni">Impostazioni</NavLink>
         </nav>
         <div className="sidebar-foot">
           <div className="muted small">{sessione?.utente.email}</div>
@@ -61,6 +67,10 @@ export function App() {
         <Route index element={<Crediti />} />
         <Route path="fatture" element={<Fatture />} />
         <Route path="clienti" element={<Clienti />} />
+        <Route path="solleciti" element={<Solleciti />} />
+        <Route path="solleciti/nuovo" element={<NuovoSollecito />} />
+        <Route path="solleciti/:id" element={<SollecitoDettaglio />} />
+        <Route path="impostazioni" element={<Impostazioni />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

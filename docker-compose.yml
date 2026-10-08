@@ -13,5 +13,14 @@ services:
       # Crea il ruolo applicativo (non superuser) al primo avvio
       - ./docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
 
+  # Casella di posta finta per lo sviluppo: cattura email e PEC inviate
+  # dall'app. Interfaccia web su http://localhost:8025
+  mail:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   db-data:
