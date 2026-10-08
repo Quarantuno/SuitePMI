@@ -3,8 +3,9 @@
 Piattaforma all-in-one per le PMI italiane. Contiene il **nucleo**
 (account, aziende, isolamento dei dati, anagrafiche), il **modulo Incassi**
 (import delle fatture elettroniche FatturaPA, scadenze, incassi e calcolo degli
-interessi di mora secondo il d.lgs. 231/2002) e il **modulo Solleciti**
-(promemoria, sollecito formale e diffida, con PDF e invio via email o PEC).
+interessi di mora secondo il d.lgs. 231/2002), il **modulo Solleciti**
+(promemoria, sollecito formale e diffida, con PDF e invio via email o PEC) e la
+**Cassa** (previsione settimanale e scadenzario di incassi e pagamenti).
 
 ## Stack
 
@@ -53,9 +54,11 @@ apps/
       incassi/         crediti scaduti con interessi e indennizzi
       azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
       solleciti/       bozze, PDF della lettera, invio email/PEC, storico
+      cassa/           previsione di cassa a settimane e scadenzario
     test/              test end-to-end + fattura XML di esempio
   web/                 React
-    src/pages/         Crediti, Solleciti, Fatture, Clienti, Impostazioni, Accesso
+    src/pages/         Crediti, Solleciti, Cassa, Fatture, Clienti, Impostazioni, Accesso
+    src/GraficoCassa.tsx  grafico SVG fatto a mano (entrate, uscite, saldo)
 packages/
   shared/              logica e tipi condivisi (usati da API e web)
 ```
@@ -121,6 +124,18 @@ l'SMTP del gestore PEC (senza `PEC_SMTP_HOST` l'invio PEC è disattivato). Nota:
 una PEC ha valore legale solo se parte da una casella PEC vera; per ora la
 casella è unica per tutta l'installazione (vedi prossimi passi).
 
+## Cassa
+
+La pagina **Cassa** parte dal saldo di cassa e banca che inserisci tu (con la data)
+e lo proietta settimana per settimana usando le rate aperte di fatture emesse
+(entrate) e ricevute (uscite). Logica in `packages/shared/src/cassa.ts`:
+
+- settimane da lunedì a domenica, la prima parte da oggi; orizzonte 4–26 settimane;
+- i **debiti già scaduti** entrano subito nella prima settimana (vanno pagati);
+- i **crediti già scaduti** per prudenza non sono contati, salvo l'opzione
+  "Conta i crediti già scaduti come incassati subito";
+- evidenzia il saldo minimo previsto e la prima settimana in cui si va sotto zero.
+
 ## API
 
 Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e login.
@@ -143,6 +158,7 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET/DELETE | `/solleciti/:id` | Dettaglio ed eliminazione (solo bozze) |
 | GET | `/solleciti/:id/pdf` | Lettera in PDF |
 | POST | `/solleciti/:id/invia` | Invio email/PEC o registrazione di un invio manuale |
+| GET | `/cassa/previsione?settimane=13&includiCreditiScaduti=false` | Previsione di cassa e scadenzario |
 
 ## Prossimi passi tecnici
 

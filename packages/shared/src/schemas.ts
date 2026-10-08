@@ -131,6 +131,9 @@ export const aziendaUpdateSchema = z.object({
   email: opzionale(z.email()),
   pec: opzionale(z.email()),
   iban: opzionale(iban),
+  /** Saldo di cassa e banca alla data indicata (può essere negativo). */
+  saldoCassaCents: z.number().int().min(-1e13).max(1e13).optional(),
+  saldoCassaAl: isoDate.optional(),
 });
 export type AziendaUpdateInput = z.infer<typeof aziendaUpdateSchema>;
 
@@ -164,3 +167,15 @@ export const sollecitoInviaSchema = z.object({
   inviatoIl: isoDate.optional(),
 });
 export type SollecitoInviaInput = z.infer<typeof sollecitoInviaSchema>;
+
+// --- Cassa -------------------------------------------------------------------
+
+export const previsioneQuerySchema = z.object({
+  da: isoDate.optional(),
+  settimane: z.coerce.number().int().min(1).max(52).default(13),
+  includiCreditiScaduti: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
+});
+export type PrevisioneQuery = z.infer<typeof previsioneQuerySchema>;

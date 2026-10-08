@@ -29,6 +29,9 @@ export const aziende = pgTable('aziende', {
   email: text('email'),
   pec: text('pec'),
   iban: text('iban'),
+  // Saldo di cassa/banca dichiarato dall'utente, base della previsione di cassa
+  saldoCassaCents: cents('saldo_cassa_cents'),
+  saldoCassaAl: date('saldo_cassa_al', { mode: 'string' }),
   createdAt: createdAt(),
 });
 

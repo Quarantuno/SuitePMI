@@ -102,6 +102,8 @@ export interface Azienda {
   email: string | null;
   pec: string | null;
   iban: string | null;
+  saldoCassaCents: number | null;
+  saldoCassaAl: IsoDate | null;
 }
 
 export type LivelloSollecitoApi = 'promemoria' | 'sollecito' | 'diffida';
@@ -138,4 +140,34 @@ export interface AnteprimaSollecito {
   totaleCents: number;
   /** Dati mancanti che conviene completare (es. IBAN, PEC del cliente). */
   avvisi: string[];
+}
+
+export interface PrevisioneCassaResponse {
+  da: IsoDate;
+  /** Saldo di cassa dichiarato in Impostazioni e data a cui si riferisce. */
+  saldo: { cents: number; al: IsoDate | null };
+  includiCreditiScaduti: boolean;
+  settimane: {
+    dal: IsoDate;
+    al: IsoDate;
+    entrateCents: number;
+    usciteCents: number;
+    nettoCents: number;
+    saldoCents: number;
+  }[];
+  arretrati: { entrateCents: number; usciteCents: number };
+  totali: { entrateCents: number; usciteCents: number };
+  saldoMinimo: { cents: number; settimanaDal: IsoDate };
+  primaSettimanaNegativa: IsoDate | null;
+  /** Scadenzario: rate aperte nell'orizzonte e arretrate, in ordine di data. */
+  movimenti: {
+    scadenzaId: string;
+    fatturaId: string;
+    numeroFattura: string;
+    controparte: { id: string; denominazione: string };
+    tipo: 'entrata' | 'uscita';
+    dataScadenza: IsoDate;
+    residuoCents: number;
+    scaduta: boolean;
+  }[];
 }

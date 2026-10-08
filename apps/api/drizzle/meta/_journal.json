@@ -29,6 +29,13 @@
       "when": 1790680925857,
       "tag": "0003_solleciti_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791447660281,
+      "tag": "0004_saldo_cassa",
+      "breakpoints": true
     }
   ]
 }
