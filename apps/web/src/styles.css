@@ -286,3 +286,4 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 .import-summary { margin: 12px 0 0; font-weight: 600; }
 .import-results { max-height: 320px; overflow-y: auto; }
 .import-results .gia, .import-results .ignorati { background: var(--surface-2); color: var(--muted); }
+.page-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }

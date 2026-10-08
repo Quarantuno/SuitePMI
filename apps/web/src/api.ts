@@ -69,3 +69,13 @@ export async function scarica(path: string): Promise<void> {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** Fa scaricare al browser un file generato lato client (es. un CSV). */
+export function salvaFile(nome: string, contenuto: string, tipo = 'text/csv;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([contenuto], { type: tipo }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

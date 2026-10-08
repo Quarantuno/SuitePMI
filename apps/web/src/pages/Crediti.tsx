@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  CSV_BOM,
+  creditiScadutiCsv,
   ETICHETTA_LIVELLO,
   formatBps,
   formatData,
@@ -10,8 +12,8 @@ import {
 } from '@suite/shared';
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api';
-import { Empty, ErrorBox, Money, PageHeader } from '../ui';
+import { api, salvaFile } from '../api';
+import { Button, Empty, ErrorBox, Money, PageHeader } from '../ui';
 
 function Kpi({ label, cents, note, accent }: { label: string; cents: number; note: string; accent?: boolean }) {
   return (
@@ -74,10 +76,17 @@ export function Crediti() {
         title="Crediti scaduti"
         subtitle="Quanto ti devono i clienti, con interessi di mora e indennizzi previsti dal d.lgs. 231/2002."
         actions={
-          <label className="inline-field">
-            <span>Calcola al</span>
-            <input type="date" value={alla} onChange={(e) => e.target.value && setAlla(e.target.value)} />
-          </label>
+          <>
+            <label className="inline-field">
+              <span>Calcola al</span>
+              <input type="date" value={alla} onChange={(e) => e.target.value && setAlla(e.target.value)} />
+            </label>
+            {d && d.righe.length > 0 && (
+              <Button variant="secondary" onClick={() => salvaFile(`crediti-scaduti-${d.alla}.csv`, CSV_BOM + creditiScadutiCsv(d))}>
+                Esporta CSV
+              </Button>
+            )}
+          </>
         }
       />
       <ErrorBox error={q.error} />

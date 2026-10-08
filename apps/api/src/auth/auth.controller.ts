@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { SkipThrottle, ThrottlerGuard } from '@nestjs/throttler';
 import { loginSchema, registerSchema, type LoginInput, type RegisterInput } from '@suite/shared';
 import { CurrentUser, Public, type SessionUser } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
+@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
@@ -21,6 +23,7 @@ export class AuthController {
     return this.auth.login(body);
   }
 
+  @SkipThrottle({ auth: true })
   @Get('me')
   me(@CurrentUser() user: SessionUser) {
     return this.auth.me(user);

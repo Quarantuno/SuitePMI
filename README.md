@@ -138,6 +138,17 @@ e lo proietta settimana per settimana usando le rate aperte di fatture emesse
   "Conta i crediti già scaduti come incassati subito";
 - evidenzia il saldo minimo previsto e la prima settimana in cui si va sotto zero.
 
+## Sicurezza
+
+- Isolamento dei dati tra aziende con Row-Level Security (vedi sopra).
+- Password con Argon2, tempi di risposta del login uniformi anche per email inesistenti.
+- Limite di **10 tentativi al minuto per IP** su login e registrazione (`AUTH_RATE_LIMIT`).
+  In produzione dietro un proxy imposta `TRUST_PROXY=true`, altrimenti tutti gli utenti
+  sembrano lo stesso IP.
+- Header di sicurezza HTTP con `helmet`.
+- Gli export CSV neutralizzano le formule (CSV injection) e sono pensati per Excel in
+  italiano (separatore `;`, virgola decimale, UTF-8 con BOM).
+
 ## API
 
 Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e login.
@@ -167,6 +178,6 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 - Casella PEC e SMTP per singola azienda (oggi sono globali), con ricevute di accettazione e consegna.
 - Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
-- Token in cookie httpOnly con refresh, inviti di altri utenti, piu aziende per utente.
-- Note di credito (TD04) e fatture in lotto.
+- Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.
+- Note di credito (TD04) collegate alla fattura originale e fatture in lotto.
 - Blocco riga (`SELECT ... FOR UPDATE`) sui pagamenti concorrenti.
