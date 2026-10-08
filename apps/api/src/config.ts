@@ -31,6 +31,8 @@ export const config = {
   jwtSecret: required('JWT_SECRET', 'solo-per-sviluppo-locale'),
   port: Number(process.env.API_PORT ?? 3000),
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
+  /** Tentativi di login/registrazione per IP ogni minuto (contro gli attacchi a forza bruta). */
+  authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 10),
   /** Email ordinarie. In locale: Mailpit (docker compose), interfaccia su http://localhost:8025 */
   smtp: smtpConfig('SMTP'),
   /** PEC: in produzione è l'SMTP del gestore PEC. Se non configurata, l'invio PEC è disattivato. */
