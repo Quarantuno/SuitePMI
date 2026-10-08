@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Azienda, AziendaUpdateInput } from '@suite/shared';
+import { todayIso, type Azienda, type AziendaUpdateInput } from '@suite/shared';
 import { eq } from 'drizzle-orm';
 import { DbService } from '../db/db.service';
 import { aziende } from '../db/schema';
@@ -13,6 +13,8 @@ export function toAzienda(a: typeof aziende.$inferSelect): Azienda {
     email: a.email,
     pec: a.pec,
     iban: a.iban,
+    saldoCassaCents: a.saldoCassaCents,
+    saldoCassaAl: a.saldoCassaAl,
   };
 }
 
@@ -28,7 +30,10 @@ export class AziendaService {
   }
 
   async update(aziendaId: string, input: AziendaUpdateInput): Promise<Azienda> {
-    const [a] = await this.dbs.db.update(aziende).set(input).where(eq(aziende.id, aziendaId)).returning();
+    const dati = { ...input };
+    // Un saldo senza data si intende aggiornato a oggi.
+    if (dati.saldoCassaCents !== undefined && !dati.saldoCassaAl) dati.saldoCassaAl = todayIso();
+    const [a] = await this.dbs.db.update(aziende).set(dati).where(eq(aziende.id, aziendaId)).returning();
     if (!a) throw new NotFoundException('Azienda non trovata');
     return toAzienda(a);
   }

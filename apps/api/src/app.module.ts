@@ -1,6 +1,7 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { AziendaModule } from './azienda/azienda.module';
+import { CassaModule } from './cassa/cassa.module';
 import { Public } from './common/auth';
 import { ContropartiModule } from './controparti/controparti.module';
 import { DbModule } from './db/db.module';
@@ -22,7 +23,7 @@ class HealthController {
  * vive nella sua cartella e dipende solo dal nucleo (db, auth) e da @suite/shared.
  */
 @Module({
-  imports: [DbModule, AuthModule, AziendaModule, ContropartiModule, FattureModule, IncassiModule, SollecitiModule],
+  imports: [DbModule, AuthModule, AziendaModule, ContropartiModule, FattureModule, IncassiModule, SollecitiModule, CassaModule],
   controllers: [HealthController],
 })
 export class AppModule {}
