@@ -10,12 +10,14 @@ import {
   type Scadenza,
 } from '@suite/shared';
 import { useRef, useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { api, ApiError } from '../api';
+import { leggiFile } from '../importFatture';
 import { Button, Empty, ErrorBox, Field, Money, PageHeader, Select } from '../ui';
 
 interface EsitoImport {
   file: string;
-  ok: boolean;
+  /** "gia": la fattura era già stata importata (non è un errore). */
+  stato: 'ok' | 'ko' | 'gia' | 'ignorati';
   messaggio: string;
   avvisi: string[];
 }
@@ -24,47 +26,73 @@ function ImportXml({ onDone }: { onDone: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [esiti, setEsiti] = useState<EsitoImport[]>([]);
   const [inCorso, setInCorso] = useState(false);
+  const [progresso, setProgresso] = useState<{ fatti: number; totale: number } | null>(null);
 
   async function importa(files: FileList | null) {
     if (!files?.length) return;
     setInCorso(true);
     const risultati: EsitoImport[] = [];
-    for (const file of Array.from(files)) {
+    const { documenti, saltati } = await leggiFile(Array.from(files));
+    setProgresso({ fatti: 0, totale: documenti.length });
+    for (const [i, doc] of documenti.entries()) {
       try {
-        const xml = await file.text();
-        const r = await api<ImportXmlResponse>('/fatture/import-xml', { body: { xml, nomeFile: file.name } });
+        const r = await api<ImportXmlResponse>('/fatture/import-xml', { body: { ...doc.corpo, nomeFile: doc.nome } });
         risultati.push({
-          file: file.name,
-          ok: true,
+          file: doc.nome,
+          stato: 'ok',
           messaggio: `Fattura ${r.fattura.numero} (${r.fattura.direzione}) di ${formatEuro(r.fattura.totaleCents)}${r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : ''}`,
           avvisi: r.avvisi,
         });
       } catch (err) {
-        risultati.push({ file: file.name, ok: false, messaggio: (err as Error).message, avvisi: [] });
+        const dettagli = err instanceof ApiError ? err.errori.map((e) => e.messaggio) : [];
+        const gia = err instanceof ApiError && err.status === 409;
+        risultati.push({ file: doc.nome, stato: gia ? 'gia' : 'ko', messaggio: (err as Error).message, avvisi: dettagli });
       }
+      setProgresso({ fatti: i + 1, totale: documenti.length });
+    }
+    if (saltati.length > 0) {
+      risultati.push({
+        file: `${saltati.length} file ignorati`,
+        stato: 'ignorati',
+        messaggio: 'non sono fatture (metadati SdI, ricevute o altri file)',
+        avvisi: saltati.slice(0, 5).concat(saltati.length > 5 ? [`… e altri ${saltati.length - 5}`] : []),
+      });
     }
     setEsiti(risultati);
     setInCorso(false);
+    setProgresso(null);
     if (input.current) input.current.value = '';
     onDone();
   }
+
+  const importate = esiti.filter((e) => e.stato === 'ok').length;
+  const gia = esiti.filter((e) => e.stato === 'gia').length;
+  const errori = esiti.filter((e) => e.stato === 'ko').length;
 
   return (
     <div className="card">
       <div className="card-row">
         <div>
           <h2>Importa fatture elettroniche</h2>
-          <p className="muted small">File XML FatturaPA (anche più di uno). Riconosciamo da soli se sono fatture emesse o ricevute.</p>
+          <p className="muted small">
+            File XML, firmati .p7m o interi archivi .zip (anche quelli del cassetto fiscale). Riconosciamo da soli se sono
+            fatture emesse o ricevute.
+          </p>
         </div>
         <Button onClick={() => input.current?.click()} disabled={inCorso}>
-          {inCorso ? 'Importazione…' : 'Scegli file XML'}
+          {inCorso ? (progresso ? `Importazione ${progresso.fatti}/${progresso.totale}…` : 'Lettura file…') : 'Scegli i file'}
         </Button>
-        <input ref={input} type="file" accept=".xml,text/xml" multiple hidden onChange={(e) => importa(e.target.files)} />
+        <input ref={input} type="file" accept=".xml,.p7m,.zip,text/xml,application/zip" multiple hidden onChange={(e) => importa(e.target.files)} />
       </div>
+      {esiti.length > 1 && (
+        <p className="small import-summary">
+          {importate} importate{gia > 0 ? `, ${gia} già presenti` : ''}{errori > 0 ? `, ${errori} con errori` : ''}
+        </p>
+      )}
       {esiti.length > 0 && (
         <ul className="import-results">
           {esiti.map((e) => (
-            <li key={e.file} className={e.ok ? 'ok' : 'ko'}>
+            <li key={e.file} className={e.stato}>
               <strong>{e.file}</strong>: {e.messaggio}
               {e.avvisi.map((a) => (
                 <div key={a} className="muted small">
@@ -174,11 +202,11 @@ function RegistraIncasso({ scadenza, onDone }: { scadenza: Scadenza; onDone: () 
   );
 }
 
-function StatoRata({ s }: { s: Scadenza }) {
+function StatoRata({ s, attiva }: { s: Scadenza; attiva: boolean }) {
   if (s.pagatoCents >= s.importoCents) return <span className="badge badge-ok">Pagata</span>;
   if (s.dataScadenza < todayIso()) return <span className="badge badge-warn">Scaduta</span>;
   if (s.pagatoCents > 0) return <span className="badge badge-info">Parziale</span>;
-  return <span className="badge">Da pagare</span>;
+  return <span className="badge">{attiva ? 'Da incassare' : 'Da pagare'}</span>;
 }
 
 export function Fatture() {
@@ -240,7 +268,7 @@ export function Fatture() {
                         <li key={s.id}>
                           <span className="num">{formatData(s.dataScadenza)}</span>
                           <Money cents={s.importoCents} />
-                          <StatoRata s={s} />
+                          <StatoRata s={s} attiva={direzione === 'attiva'} />
                           {s.pagatoCents < s.importoCents &&
                             (incasso === s.id ? (
                               <RegistraIncasso

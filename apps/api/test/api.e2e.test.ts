@@ -237,4 +237,15 @@ describe('modulo incassi', () => {
     await http.delete(`/api/fatture/${fattura.id}`).set(auth(a)).expect(204);
     await http.get(`/api/fatture/${fattura.id}`).set(auth(a)).expect(404);
   });
+
+  it('importa la stessa fattura firmata digitalmente (.p7m)', async () => {
+    const p7m = readFileSync(join(__dirname, 'fixtures/fattura-attiva-ber.xml.p7m')).toString('base64');
+    const res = await http.post('/api/fatture/import-xml').set(auth(a)).send({ p7mBase64: p7m }).expect(201);
+    expect(res.body.fattura).toMatchObject({ numero: '2026/0042', totaleCents: 244_000 });
+    expect(res.body.controparteCreata).toBe(false);
+
+    const err = await http.post('/api/fatture/import-xml').set(auth(a)).send({ p7mBase64: Buffer.from(xml).toString('base64') }).expect(400);
+    expect(err.body.message).toMatch(/p7m/);
+    await http.post('/api/fatture/import-xml').set(auth(a)).send({}).expect(400);
+  });
 });
