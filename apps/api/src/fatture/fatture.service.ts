@@ -12,7 +12,7 @@ import {
   type ImportXmlResponse,
   type PagamentoInput,
 } from '@suite/shared';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { pgErrorCode, UNIQUE_VIOLATION } from '../common/pg-errors';
 import { ContropartiService } from '../controparti/controparti.service';
 import { DbService, type Tx } from '../db/db.service';
@@ -21,18 +21,22 @@ import { FatturaPAError, parseFatturaPA, type SoggettoFattura } from './fatturap
 
 const conScadenze = {
   controparte: { columns: { id: true, denominazione: true } },
+  fatturaCollegata: { columns: { id: true, numero: true } },
   scadenze: {
     orderBy: scadenze.dataScadenza,
-    with: { pagamenti: { columns: { importoCents: true } } },
+    with: { pagamenti: { columns: { importoCents: true, tipo: true } } },
   },
 } as const;
 
 type FatturaConScadenze = typeof fatture.$inferSelect & {
   controparte: { id: string; denominazione: string };
-  scadenze: (typeof scadenze.$inferSelect & { pagamenti: { importoCents: number }[] })[];
+  fatturaCollegata: { id: string; numero: string } | null;
+  scadenze: (typeof scadenze.$inferSelect & { pagamenti: { importoCents: number; tipo: 'incasso' | 'nota_credito' }[] })[];
 };
 
-function toFattura(f: FatturaConScadenze): Fattura {
+const somma = (ps: { importoCents: number }[]) => ps.reduce((t, p) => t + p.importoCents, 0);
+
+function toFattura(f: FatturaConScadenze, applicatoCents = 0): Fattura {
   return {
     id: f.id,
     direzione: f.direzione,
@@ -40,12 +44,17 @@ function toFattura(f: FatturaConScadenze): Fattura {
     dataEmissione: f.dataEmissione,
     totaleCents: f.totaleCents,
     origine: f.origine,
+    tipoDocumento: f.tipoDocumento,
+    notaDiCredito: f.tipoDocumento === 'TD04',
+    fatturaCollegata: f.fatturaCollegata,
+    applicatoCents,
     controparte: f.controparte,
     scadenze: f.scadenze.map((s) => ({
       id: s.id,
       dataScadenza: s.dataScadenza,
       importoCents: s.importoCents,
-      pagatoCents: s.pagamenti.reduce((sum, p) => sum + p.importoCents, 0),
+      pagatoCents: somma(s.pagamenti.filter((p) => p.tipo === 'incasso')),
+      stornatoCents: somma(s.pagamenti.filter((p) => p.tipo === 'nota_credito')),
     })),
   };
 }
@@ -71,7 +80,8 @@ export class FattureService {
         orderBy: [desc(fatture.dataEmissione), desc(fatture.createdAt)],
         with: conScadenze,
       });
-      return rows.map(toFattura);
+      const applicato = await this.applicatoPerNota(tx);
+      return rows.map((f) => toFattura(f as FatturaConScadenze, applicato.get(f.id)));
     });
   }
 
@@ -155,10 +165,24 @@ export class FattureService {
             totaleCents: parsed.totaleCents,
             origine: 'xml',
             xmlOriginale: xml,
+            tipoDocumento: parsed.tipoDocumento,
           })
           .returning();
-        await tx.insert(scadenze).values(parsed.scadenze.map((r) => ({ ...r, aziendaId, fatturaId: f!.id })));
-        return { fattura: await this.load(tx, f!.id), controparteCreata: creata, avvisi: parsed.avvisi };
+        const avvisi = [...parsed.avvisi];
+        if (parsed.tipoDocumento === 'TD04') {
+          // Nota di credito: niente rate, riduce le rate aperte della fattura collegata
+          const collegata = await this.trovaCollegata(tx, controparteId, direzione, parsed.collegate);
+          if (collegata) {
+            avvisi.push(...(await this.applicaNota(tx, aziendaId, f!, collegata)));
+          } else if (parsed.collegate.length > 0) {
+            avvisi.push(
+              `Fattura ${parsed.collegate.map((c) => c.numero).join(', ')} non trovata: importala e poi abbina la nota di credito.`,
+            );
+          }
+        } else {
+          await tx.insert(scadenze).values(parsed.scadenze.map((r) => ({ ...r, aziendaId, fatturaId: f!.id })));
+        }
+        return { fattura: await this.load(tx, f!.id), controparteCreata: creata, avvisi };
       });
     } catch (err) {
       duplicata(err);
@@ -169,6 +193,24 @@ export class FattureService {
     await this.dbs.withTenant(aziendaId, async (tx) => {
       const deleted = await tx.delete(fatture).where(eq(fatture.id, id)).returning({ id: fatture.id });
       if (deleted.length === 0) throw new NotFoundException('Fattura non trovata');
+    });
+  }
+
+  /** Abbina a mano una nota di credito a una fattura (o la sposta su un'altra). */
+  async collegaNota(aziendaId: string, notaId: string, fatturaId: string): Promise<{ fattura: Fattura; avvisi: string[] }> {
+    return this.dbs.withTenant(aziendaId, async (tx) => {
+      const [nota] = await tx.select().from(fatture).where(eq(fatture.id, notaId));
+      if (!nota) throw new NotFoundException('Nota di credito non trovata');
+      if (nota.tipoDocumento !== 'TD04') throw new BadRequestException('Il documento non è una nota di credito');
+      const [target] = await tx.select().from(fatture).where(eq(fatture.id, fatturaId));
+      if (!target) throw new NotFoundException('Fattura non trovata');
+      if (target.tipoDocumento === 'TD04') throw new BadRequestException('Non puoi collegare una nota di credito a un\'altra nota');
+      if (target.controparteId !== nota.controparteId || target.direzione !== nota.direzione) {
+        throw new BadRequestException('La fattura deve avere la stessa controparte e la stessa direzione della nota');
+      }
+      await tx.delete(pagamenti).where(eq(pagamenti.notaCreditoId, nota.id));
+      const avvisi = await this.applicaNota(tx, aziendaId, nota, target);
+      return { fattura: await this.load(tx, nota.id), avvisi };
     });
   }
 
@@ -193,7 +235,88 @@ export class FattureService {
   private async load(tx: Tx, id: string): Promise<Fattura> {
     const f = await tx.query.fatture.findFirst({ where: eq(fatture.id, id), with: conScadenze });
     if (!f) throw new NotFoundException('Fattura non trovata');
-    return toFattura(f as FatturaConScadenze);
+    const applicato = await this.applicatoPerNota(tx, id);
+    return toFattura(f as FatturaConScadenze, applicato.get(id));
+  }
+
+  /** Importo scalato da ciascuna nota di credito (dai pagamenti di tipo nota_credito). */
+  private async applicatoPerNota(tx: Tx, notaId?: string): Promise<Map<string, number>> {
+    const rows = await tx
+      .select({ notaId: pagamenti.notaCreditoId, totale: sql<string>`sum(${pagamenti.importoCents})` })
+      .from(pagamenti)
+      .where(notaId ? eq(pagamenti.notaCreditoId, notaId) : isNotNull(pagamenti.notaCreditoId))
+      .groupBy(pagamenti.notaCreditoId);
+    return new Map(rows.map((r) => [r.notaId!, Number(r.totale)]));
+  }
+
+  /** Cerca la fattura rettificata tra quelle della stessa controparte e direzione. */
+  private async trovaCollegata(
+    tx: Tx,
+    controparteId: string,
+    direzione: 'attiva' | 'passiva',
+    collegate: { numero: string; data: string | null }[],
+  ) {
+    for (const c of collegate) {
+      const candidate = await tx
+        .select()
+        .from(fatture)
+        .where(
+          and(
+            eq(fatture.controparteId, controparteId),
+            eq(fatture.direzione, direzione),
+            eq(fatture.numero, c.numero),
+            ne(fatture.tipoDocumento, 'TD04'),
+          ),
+        );
+      const esatta = candidate.find((f) => f.dataEmissione === c.data) ?? (candidate.length === 1 ? candidate[0] : undefined);
+      if (esatta) return esatta;
+    }
+    return undefined;
+  }
+
+  /**
+   * Scala l'importo della nota dalle rate aperte, partendo dall'ultima.
+   * La riduzione ha effetto dalla scadenza della rata: sulla parte stornata non
+   * maturano interessi di mora, perché quella somma non era dovuta.
+   */
+  private async applicaNota(
+    tx: Tx,
+    aziendaId: string,
+    nota: typeof fatture.$inferSelect,
+    target: typeof fatture.$inferSelect,
+  ): Promise<string[]> {
+    await tx.update(fatture).set({ fatturaCollegataId: target.id }).where(eq(fatture.id, nota.id));
+    const rate = await tx.query.scadenze.findMany({
+      where: eq(scadenze.fatturaId, target.id),
+      orderBy: desc(scadenze.dataScadenza),
+      with: { pagamenti: { columns: { importoCents: true } } },
+    });
+    let resto = nota.totaleCents;
+    for (const r of rate) {
+      if (resto <= 0) break;
+      const aperto = r.importoCents - somma(r.pagamenti);
+      const quota = Math.min(aperto, resto);
+      if (quota <= 0) continue;
+      await tx.insert(pagamenti).values({
+        aziendaId,
+        scadenzaId: r.id,
+        data: r.dataScadenza < nota.dataEmissione ? r.dataScadenza : nota.dataEmissione,
+        importoCents: quota,
+        tipo: 'nota_credito',
+        notaCreditoId: nota.id,
+        note: `Nota di credito ${nota.numero}`,
+      });
+      resto -= quota;
+    }
+    const avvisi = [`Nota di credito applicata alla fattura ${target.numero}.`];
+    if (resto > 0) {
+      avvisi.push(
+        `La nota supera il residuo della fattura di ${(resto / 100).toFixed(2).replace('.', ',')} €: resta un credito ${
+          target.direzione === 'attiva' ? 'del cliente' : 'verso il fornitore'
+        } da regolare a parte.`,
+      );
+    }
+    return avvisi;
   }
 
   private async trovaOCreaControparte(

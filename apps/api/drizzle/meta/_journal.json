@@ -36,6 +36,13 @@
       "when": 1791447660281,
       "tag": "0004_saldo_cassa",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792671611499,
+      "tag": "0005_note_credito",
+      "breakpoints": true
     }
   ]
 }

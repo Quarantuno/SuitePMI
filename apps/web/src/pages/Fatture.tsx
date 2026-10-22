@@ -40,7 +40,7 @@ function ImportXml({ onDone }: { onDone: () => void }) {
         risultati.push({
           file: doc.nome,
           stato: 'ok',
-          messaggio: `Fattura ${r.fattura.numero} (${r.fattura.direzione}) di ${formatEuro(r.fattura.totaleCents)}${r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : ''}`,
+          messaggio: `${r.fattura.notaDiCredito ? 'Nota di credito' : 'Fattura'} ${r.fattura.numero} (${r.fattura.direzione === 'attiva' ? 'emessa' : 'ricevuta'}) di ${formatEuro(r.fattura.totaleCents)}${r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : ''}`,
           avvisi: r.avvisi,
         });
       } catch (err) {
@@ -176,7 +176,7 @@ function NuovaFattura({ onDone }: { onDone: () => void }) {
 }
 
 function RegistraIncasso({ scadenza, onDone }: { scadenza: Scadenza; onDone: () => void }) {
-  const residuo = scadenza.importoCents - scadenza.pagatoCents;
+  const residuo = scadenza.importoCents - scadenza.pagatoCents - scadenza.stornatoCents;
   const [data, setData] = useState(todayIso());
   const [importo, setImporto] = useState((residuo / 100).toFixed(2).replace('.', ','));
   const m = useMutation({
@@ -202,10 +202,63 @@ function RegistraIncasso({ scadenza, onDone }: { scadenza: Scadenza; onDone: () 
   );
 }
 
+function NotaCredito({ nota, fatture, onDone }: { nota: Fattura; fatture: Fattura[]; onDone: () => void }) {
+  const [scelta, setScelta] = useState('');
+  const [avvisi, setAvvisi] = useState<string[]>([]);
+  const m = useMutation({
+    mutationFn: () => api<{ fattura: Fattura; avvisi: string[] }>(`/fatture/${nota.id}/collega`, { body: { fatturaId: scelta } }),
+    onSuccess: (r) => {
+      setAvvisi(r.avvisi);
+      onDone();
+    },
+  });
+  return (
+    <div className="nota-credito">
+      {nota.fatturaCollegata ? (
+        <span className="small">
+          Rettifica la fattura <strong>{nota.fatturaCollegata.numero}</strong>: scalati <Money cents={nota.applicatoCents} />
+          {nota.applicatoCents < nota.totaleCents && (
+            <span className="muted"> (eccedenza <Money cents={nota.totaleCents - nota.applicatoCents} />)</span>
+          )}
+        </span>
+      ) : (
+        <form
+          className="inline-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            m.mutate();
+          }}
+        >
+          <span className="badge badge-warn">Da abbinare</span>
+          <select value={scelta} onChange={(e) => setScelta(e.target.value)} aria-label="Fattura da rettificare" required>
+            <option value="">Scegli la fattura…</option>
+            {fatture.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.numero} del {formatData(f.dataEmissione)}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" variant="secondary" disabled={!scelta || m.isPending}>
+            Abbina
+          </Button>
+          {m.error && <span className="field-error">{(m.error as Error).message}</span>}
+        </form>
+      )}
+      {avvisi.map((a) => (
+        <div key={a} className="muted small">
+          {a}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StatoRata({ s, attiva }: { s: Scadenza; attiva: boolean }) {
-  if (s.pagatoCents >= s.importoCents) return <span className="badge badge-ok">Pagata</span>;
+  const chiusa = s.pagatoCents + s.stornatoCents >= s.importoCents;
+  if (chiusa && s.pagatoCents === 0) return <span className="badge badge-info">Stornata</span>;
+  if (chiusa) return <span className="badge badge-ok">Pagata</span>;
   if (s.dataScadenza < todayIso()) return <span className="badge badge-warn">Scaduta</span>;
-  if (s.pagatoCents > 0) return <span className="badge badge-info">Parziale</span>;
+  if (s.pagatoCents + s.stornatoCents > 0) return <span className="badge badge-info">Parziale</span>;
   return <span className="badge">{attiva ? 'Da incassare' : 'Da pagare'}</span>;
 }
 
@@ -253,23 +306,37 @@ export function Fatture() {
             </thead>
             <tbody>
               {q.data.map((f) => (
-                <tr key={f.id}>
+                <tr key={f.id} className={f.notaDiCredito ? 'riga-nota' : undefined}>
                   <td>
-                    {f.numero} {f.origine === 'xml' && <span className="badge">XML</span>}
+                    {f.numero} {f.notaDiCredito && <span className="badge badge-info">Nota di credito</span>}{' '}
+                    {f.origine === 'xml' && <span className="badge">XML</span>}
                   </td>
                   <td>{formatData(f.dataEmissione)}</td>
                   <td>{f.controparte.denominazione}</td>
                   <td className="r">
+                    {f.notaDiCredito ? '−' : ''}
                     <Money cents={f.totaleCents} strong />
                   </td>
                   <td>
+                    {f.notaDiCredito && (
+                      <NotaCredito
+                        nota={f}
+                        fatture={q.data.filter((x) => !x.notaDiCredito && x.controparte.id === f.controparte.id)}
+                        onDone={aggiorna}
+                      />
+                    )}
                     <ul className="rate">
                       {f.scadenze.map((s) => (
                         <li key={s.id}>
                           <span className="num">{formatData(s.dataScadenza)}</span>
                           <Money cents={s.importoCents} />
                           <StatoRata s={s} attiva={direzione === 'attiva'} />
-                          {s.pagatoCents < s.importoCents &&
+                          {s.stornatoCents > 0 && (
+                            <span className="muted small">
+                              −<Money cents={s.stornatoCents} /> da note di credito
+                            </span>
+                          )}
+                          {s.pagatoCents + s.stornatoCents < s.importoCents &&
                             (incasso === s.id ? (
                               <RegistraIncasso
                                 scadenza={s}

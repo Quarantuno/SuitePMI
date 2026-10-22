@@ -27,7 +27,10 @@ export interface Scadenza {
   id: string;
   dataScadenza: IsoDate;
   importoCents: number;
+  /** Incassato (o pagato) davvero. */
   pagatoCents: number;
+  /** Stornato da note di credito. Residuo = importo - pagato - stornato. */
+  stornatoCents: number;
 }
 
 export interface Fattura {
@@ -39,6 +42,13 @@ export interface Fattura {
   controparte: { id: string; denominazione: string };
   scadenze: Scadenza[];
   origine: 'manuale' | 'xml';
+  /** Codice FatturaPA: TD01 fattura, TD04 nota di credito. */
+  tipoDocumento: string;
+  notaDiCredito: boolean;
+  /** Nota di credito: fattura rettificata. Fattura: note di credito ricevute. */
+  fatturaCollegata: { id: string; numero: string } | null;
+  /** Nota di credito: quanto è stato effettivamente scalato dalla fattura collegata. */
+  applicatoCents: number;
 }
 
 export type StatoCredito = 'scaduto' | 'pagato_in_ritardo';
