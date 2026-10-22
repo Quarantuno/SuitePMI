@@ -183,3 +183,6 @@ export const previsioneQuerySchema = z.object({
     .transform((v) => v === 'true'),
 });
 export type PrevisioneQuery = z.infer<typeof previsioneQuerySchema>;
+
+export const collegaNotaSchema = z.object({ fatturaId: z.uuid() });
+export type CollegaNotaInput = z.infer<typeof collegaNotaSchema>;

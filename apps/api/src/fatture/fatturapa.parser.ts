@@ -30,12 +30,20 @@ export interface FatturaPAParsed {
   cessionario: SoggettoFattura;
   pecDestinatario: string | null;
   scadenze: { dataScadenza: IsoDate; importoCents: number }[];
+  /** Per le note di credito (TD04): fatture di riferimento. */
+  collegate: { numero: string; data: IsoDate | null }[];
   avvisi: string[];
 }
 
 export class FatturaPAError extends Error {}
 
-const ARRAY_TAGS = new Set(['FatturaElettronicaBody', 'DatiPagamento', 'DettaglioPagamento', 'DatiRiepilogo']);
+const ARRAY_TAGS = new Set([
+  'FatturaElettronicaBody',
+  'DatiPagamento',
+  'DettaglioPagamento',
+  'DatiRiepilogo',
+  'DatiFattureCollegate',
+]);
 
 const parser = new XMLParser({
   ignoreAttributes: true,
@@ -135,14 +143,20 @@ export function parseFatturaPA(xml: string): FatturaPAParsed {
   const dgd = obj(path(body, 'DatiGenerali', 'DatiGeneraliDocumento'));
   if (!dgd) throw new FatturaPAError('DatiGeneraliDocumento mancanti');
   const tipoDocumento = str(dgd.TipoDocumento) ?? 'TD01';
-  if (tipoDocumento === 'TD04' || tipoDocumento === 'TD08') {
-    throw new FatturaPAError('Le note di credito non sono ancora supportate');
+  if (tipoDocumento === 'TD08') {
+    throw new FatturaPAError('Le note di credito semplificate (TD08) non sono ancora supportate');
   }
+  const notaDiCredito = tipoDocumento === 'TD04';
   const numero = str(dgd.Numero);
   if (!numero) throw new FatturaPAError('Numero fattura mancante');
   const dataDoc = data(dgd.Data, 'Data documento');
   const divisa = str(dgd.Divisa) ?? 'EUR';
   if (divisa !== 'EUR') avvisi.push(`Fattura in ${divisa}: gli importi sono trattati come euro.`);
+
+  // Fattura a cui si riferisce la nota di credito (DatiFattureCollegate)
+  const collegate = ((path(body, 'DatiGenerali', 'DatiFattureCollegate') as unknown[] | undefined) ?? [])
+    .map((c) => ({ numero: str(path(c, 'IdDocumento')), data: str(path(c, 'Data')) ?? null }))
+    .filter((c): c is { numero: string; data: string | null } => !!c.numero);
 
   let totaleCents: number;
   if (str(dgd.ImportoTotaleDocumento)) {
@@ -156,7 +170,26 @@ export function parseFatturaPA(xml: string): FatturaPAParsed {
     avvisi.push('ImportoTotaleDocumento assente: totale calcolato dal riepilogo IVA.');
   }
 
+  // Alcuni software scrivono le note di credito con importi negativi: conta il valore assoluto.
+  totaleCents = Math.abs(totaleCents);
+
   const scadenze: FatturaPAParsed['scadenze'] = [];
+  if (notaDiCredito) {
+    if (collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
+    return {
+      tipoDocumento,
+      numero,
+      data: dataDoc,
+      divisa,
+      totaleCents,
+      cedente,
+      cessionario,
+      pecDestinatario,
+      scadenze,
+      collegate,
+      avvisi,
+    };
+  }
   const datiPagamento = (obj(body)?.DatiPagamento as unknown[] | undefined) ?? [];
   for (const dp of datiPagamento) {
     const dettagli = (obj(dp)?.DettaglioPagamento as unknown[] | undefined) ?? [];
@@ -197,6 +230,7 @@ export function parseFatturaPA(xml: string): FatturaPAParsed {
     cessionario,
     pecDestinatario,
     scadenze,
+    collegate,
     avvisi,
   };
 }

@@ -8,6 +8,7 @@ import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { configureApp } from '../src/app.factory';
+import { notaDiCredito } from './note-credito';
 import { AppModule } from '../src/app.module';
 
 const xml = readFileSync(join(__dirname, 'fixtures/fattura-attiva.xml'), 'utf8');
@@ -247,5 +248,67 @@ describe('modulo incassi', () => {
     const err = await http.post('/api/fatture/import-xml').set(auth(a)).send({ p7mBase64: Buffer.from(xml).toString('base64') }).expect(400);
     expect(err.body.message).toMatch(/p7m/);
     await http.post('/api/fatture/import-xml').set(auth(a)).send({}).expect(400);
+  });
+});
+
+describe('note di credito', () => {
+  let fattura: Fattura;
+  const importa = (x: string) => http.post('/api/fatture/import-xml').set(auth(a)).send({ xml: x });
+
+  it("scala la nota dall'ultima rata e niente interessi sulla parte stornata", async () => {
+    fattura = (await http.get('/api/fatture?direzione=attiva').set(auth(a)).expect(200)).body.find(
+      (f: Fattura) => f.numero === '2026/0042',
+    );
+    const res = await importa(notaDiCredito(xml, { numero: 'NC-1', data: '2026-02-20', importo: '500.00', rif: '2026/0042' })).expect(201);
+    expect(res.body.fattura).toMatchObject({
+      notaDiCredito: true,
+      tipoDocumento: 'TD04',
+      totaleCents: 50_000,
+      applicatoCents: 50_000,
+      fatturaCollegata: { id: fattura.id, numero: '2026/0042' },
+      scadenze: [],
+    });
+    expect(res.body.avvisi).toContain('Nota di credito applicata alla fattura 2026/0042.');
+
+    const f: Fattura = (await http.get(`/api/fatture/${fattura.id}`).set(auth(a)).expect(200)).body;
+    expect(f.scadenze.map((r) => [r.dataScadenza, r.pagatoCents, r.stornatoCents])).toEqual([
+      ['2026-02-14', 0, 0],
+      ['2026-03-16', 0, 50_000],
+    ]);
+
+    // Rata 2: 720 € aperti dal 17/03 al 15/04 (30 gg al 10,15%) = 6,01 €
+    const c: CreditiScadutiResponse = (await http.get('/api/incassi/crediti-scaduti?alla=2026-04-15').set(auth(a)).expect(200)).body;
+    const rata2 = c.righe.find((r) => r.numeroFattura === '2026/0042' && r.dataScadenza === '2026-03-16')!;
+    expect(rata2).toMatchObject({ residuoCents: 72_000, interessiCents: 601 });
+  });
+
+  it('una seconda nota passa alla rata precedente', async () => {
+    await importa(notaDiCredito(xml, { numero: 'NC-2', data: '2026-02-25', importo: '1000.00', rif: '2026/0042' })).expect(201);
+    const f: Fattura = (await http.get(`/api/fatture/${fattura.id}`).set(auth(a)).expect(200)).body;
+    expect(f.scadenze.map((r) => r.stornatoCents)).toEqual([28_000, 122_000]);
+  });
+
+  it('una nota senza fattura trovata si abbina a mano e segnala l\'eccedenza', async () => {
+    const res = await importa(notaDiCredito(xml, { numero: 'NC-3', data: '2026-03-01', importo: '3000.00', rif: 'NON-ESISTE' })).expect(201);
+    expect(res.body.fattura).toMatchObject({ fatturaCollegata: null, applicatoCents: 0 });
+    expect(res.body.avvisi.join(' ')).toMatch(/non trovata/);
+
+    await http.post(`/api/fatture/${res.body.fattura.id}/collega`).set(auth(b)).send({ fatturaId: fattura.id }).expect(404);
+    await http.post(`/api/fatture/${fattura.id}/collega`).set(auth(a)).send({ fatturaId: fattura.id }).expect(400);
+
+    const col = await http.post(`/api/fatture/${res.body.fattura.id}/collega`).set(auth(a)).send({ fatturaId: fattura.id }).expect(200);
+    expect(col.body.fattura.applicatoCents).toBe(94_000);
+    expect(col.body.avvisi.join(' ')).toMatch(/supera il residuo della fattura di 2060,00 €/);
+
+    const c: CreditiScadutiResponse = (await http.get('/api/incassi/crediti-scaduti?alla=2026-04-15').set(auth(a)).expect(200)).body;
+    expect(c.righe.filter((r) => r.numeroFattura === '2026/0042')).toEqual([]);
+  });
+
+  it('eliminando la nota la fattura torna aperta', async () => {
+    const note = (await http.get('/api/fatture?direzione=attiva').set(auth(a)).expect(200)).body.filter((f: Fattura) => f.notaDiCredito);
+    expect(note).toHaveLength(3);
+    for (const n of note) await http.delete(`/api/fatture/${n.id}`).set(auth(a)).expect(204);
+    const f: Fattura = (await http.get(`/api/fatture/${fattura.id}`).set(auth(a)).expect(200)).body;
+    expect(f.scadenze.map((r) => r.stornatoCents)).toEqual([0, 0]);
   });
 });

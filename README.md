@@ -32,6 +32,11 @@ pnpm dev            # API su :3000, web su http://localhost:5173
 Apri http://localhost:5173, registra la tua azienda e importa le fatture da **Fatture**:
 file XML, firmati `.p7m` (DER, BER o base64) oppure interi archivi `.zip` come quelli
 scaricati dal cassetto fiscale (i file di metadati `_MT_` vengono ignorati).
+
+Le **note di credito** (TD04) si importano come le fatture: se trovano la fattura
+indicata in `DatiFattureCollegate` ne riducono le rate aperte partendo dall'ultima,
+altrimenti restano "da abbinare" e le colleghi a mano dalla lista. Sulla parte
+stornata non si calcolano interessi di mora, e un'eventuale eccedenza viene segnalata.
 Un file di prova e in `apps/api/test/fixtures/fattura-attiva.xml`: funziona se ti
 registri con la partita IVA `12345678903`.
 
@@ -163,6 +168,7 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET/POST | `/fatture` | Elenco (`?direzione=attiva\|passiva`) e fattura manuale |
 | POST | `/fatture/import-xml` | Import FatturaPA (`{ "xml": "..." }` oppure `{ "p7mBase64": "..." }`) |
 | GET/DELETE | `/fatture/:id` | Dettaglio ed eliminazione |
+| POST | `/fatture/:id/collega` | Abbina una nota di credito alla fattura (`{ "fatturaId": "..." }`) |
 | POST | `/scadenze/:id/pagamenti` | Registra un incasso o pagamento |
 | GET | `/incassi/crediti-scaduti?alla=AAAA-MM-GG` | Crediti, interessi, indennizzi, ultimo sollecito |
 | GET/PATCH | `/azienda` | Dati dell'azienda (indirizzo, email, PEC, IBAN) |
@@ -179,5 +185,5 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 - Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.
-- Note di credito (TD04) collegate alla fattura originale e fatture in lotto.
+- Fatture in lotto (più fatture nello stesso file) e note di credito semplificate (TD08).
 - Blocco riga (`SELECT ... FOR UPDATE`) sui pagamenti concorrenti.

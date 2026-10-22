@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
+  type AnyPgColumn,
   date,
   index,
   pgTable,
@@ -103,6 +104,10 @@ export const fatture = pgTable(
     dataEmissione: date('data_emissione', { mode: 'string' }).notNull(),
     totaleCents: cents('totale_cents').notNull(),
     origine: text('origine', { enum: ['manuale', 'xml'] }).notNull().default('manuale'),
+    /** TD01 fattura, TD04 nota di credito (codici FatturaPA). */
+    tipoDocumento: text('tipo_documento').notNull().default('TD01'),
+    /** Per le note di credito: la fattura che rettificano. */
+    fatturaCollegataId: uuid('fattura_collegata_id').references((): AnyPgColumn => fatture.id, { onDelete: 'set null' }),
     xmlOriginale: text('xml_originale'),
     createdAt: createdAt(),
   },
@@ -137,9 +142,12 @@ export const pagamenti = pgTable(
     data: date('data', { mode: 'string' }).notNull(),
     importoCents: cents('importo_cents').notNull(),
     note: text('note'),
+    /** "nota_credito": riduzione dovuta a una nota di credito, non un incasso di denaro. */
+    tipo: text('tipo', { enum: ['incasso', 'nota_credito'] }).notNull().default('incasso'),
+    notaCreditoId: uuid('nota_credito_id').references(() => fatture.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
   },
-  (t) => [index('pagamenti_scadenza_idx').on(t.scadenzaId)],
+  (t) => [index('pagamenti_scadenza_idx').on(t.scadenzaId), index('pagamenti_nota_idx').on(t.notaCreditoId)],
 );
 
 export const solleciti = pgTable(
@@ -184,6 +192,7 @@ export const sollecitiRelations = relations(solleciti, ({ one }) => ({
 
 export const fattureRelations = relations(fatture, ({ one, many }) => ({
   controparte: one(controparti, { fields: [fatture.controparteId], references: [controparti.id] }),
+  fatturaCollegata: one(fatture, { fields: [fatture.fatturaCollegataId], references: [fatture.id] }),
   scadenze: many(scadenze),
 }));
 

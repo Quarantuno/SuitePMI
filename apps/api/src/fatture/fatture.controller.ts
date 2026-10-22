@@ -11,9 +11,11 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  collegaNotaSchema,
   fatturaCreateSchema,
   importXmlSchema,
   pagamentoSchema,
+  type CollegaNotaInput,
   type FatturaCreateInput,
   type ImportXmlInput,
   type PagamentoInput,
@@ -50,6 +52,17 @@ export class FattureController {
       }
     }
     return this.service.importXml(user.aziendaId, xml!);
+  }
+
+  /** Abbina una nota di credito alla fattura che rettifica. */
+  @Post(':id/collega')
+  @HttpCode(200)
+  collega(
+    @CurrentUser() user: SessionUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(collegaNotaSchema)) body: CollegaNotaInput,
+  ) {
+    return this.service.collegaNota(user.aziendaId, id, body.fatturaId);
   }
 
   @Get(':id')

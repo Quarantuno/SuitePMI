@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FatturaPAError, parseFatturaPA } from './fatturapa.parser';
+import { notaDiCredito } from '../../test/note-credito';
 
 const xml = readFileSync(join(__dirname, '../../test/fixtures/fattura-attiva.xml'), 'utf8');
 
@@ -37,8 +38,16 @@ describe('parseFatturaPA', () => {
     expect(parseFatturaPA(conGiorni).scadenze[0]!.dataScadenza).toBe('2026-04-01');
   });
 
-  it('rifiuta note di credito e file non validi', () => {
-    expect(() => parseFatturaPA(xml.replace('TD01', 'TD04'))).toThrow(FatturaPAError);
+  it('legge le note di credito con la fattura collegata', () => {
+    const nota = parseFatturaPA(notaDiCredito(xml, { numero: 'NC-5', data: '2026-02-20', importo: '-500.00', rif: '2026/0042' }));
+    expect(nota).toMatchObject({ tipoDocumento: 'TD04', numero: 'NC-5', totaleCents: 50_000, scadenze: [] });
+    expect(nota.collegate).toEqual([{ numero: '2026/0042', data: '2026-01-15' }]);
+    const senzaRif = parseFatturaPA(notaDiCredito(xml, { numero: 'NC-6', data: '2026-02-20', importo: '10.00' }));
+    expect(senzaRif.avvisi[0]).toMatch(/abbinala a mano/);
+  });
+
+  it('rifiuta note di credito semplificate e file non validi', () => {
+    expect(() => parseFatturaPA(xml.replace('TD01', 'TD08'))).toThrow(FatturaPAError);
     expect(() => parseFatturaPA('<html></html>')).toThrow(/non è una FatturaPA/);
   });
 });
