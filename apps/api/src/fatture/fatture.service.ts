@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   addDays,
+  etichettaTipoDocumento,
+  TIPI_SOLO_FISCALI,
   TERMINE_PAGAMENTO_DEFAULT_GIORNI,
   type Fattura,
   type FatturaCreateInput,
@@ -132,12 +134,25 @@ export class FattureService {
    * se siamo il cedente è una fattura attiva (da incassare), altrimenti passiva.
    */
   async importXml(aziendaId: string, xml: string): Promise<ImportXmlResponse> {
-    let documenti: FatturaPAParsed[];
+    let tutti: FatturaPAParsed[];
     try {
-      documenti = parseFatturaPALotto(xml);
+      tutti = parseFatturaPALotto(xml);
     } catch (err) {
       if (err instanceof FatturaPAError) throw new BadRequestException(err.message);
       throw err;
+    }
+
+    // Integrazioni e autofatture non sono crediti né debiti verso la controparte: le saltiamo.
+    const ignorate = tutti
+      .filter((d) => TIPI_SOLO_FISCALI.has(d.tipoDocumento))
+      .map((d) => ({ numero: d.numero, tipoDocumento: d.tipoDocumento }));
+    const avvisiIgnorate = ignorate.map(
+      (d) =>
+        `${d.numero}: ${etichettaTipoDocumento(d.tipoDocumento)} (${d.tipoDocumento}) — documento solo fiscale, non genera incassi né pagamenti.`,
+    );
+    const documenti = tutti.filter((d) => !TIPI_SOLO_FISCALI.has(d.tipoDocumento));
+    if (documenti.length === 0) {
+      return { fattura: null, fatture: [], duplicate: [], ignorate, controparteCreata: false, avvisi: avvisiIgnorate };
     }
 
     const [azienda] = await this.dbs.db.select().from(aziende).where(eq(aziende.id, aziendaId));
@@ -162,7 +177,7 @@ export class FattureService {
           pec: siamoCedente ? primo.pecDestinatario : null,
         });
         const lotto = documenti.length > 1;
-        const avvisi: string[] = [];
+        const avvisi: string[] = [...avvisiIgnorate];
         const importate: Fattura[] = [];
         const duplicate: string[] = [];
         // Prima le fatture, poi le note di credito: così una nota trova la fattura dello stesso lotto.
@@ -214,6 +229,14 @@ export class FattureService {
             }
           } else {
             await tx.insert(scadenze).values(parsed.scadenze.map((r) => ({ ...r, aziendaId, fatturaId: f!.id })));
+            if (parsed.tipoDocumento === 'TD05' && parsed.collegate.length > 0) {
+              // Nota di debito: è un importo in più da incassare, con rate sue; teniamo il riferimento.
+              const integrata = await this.trovaCollegata(tx, controparteId, direzione, parsed.collegate);
+              if (integrata) {
+                await tx.update(fatture).set({ fatturaCollegataId: integrata.id }).where(eq(fatture.id, f!.id));
+                avvisi.push(`${pref}Nota di debito collegata alla fattura ${integrata.numero}.`);
+              }
+            }
             avvisi.push(...(await this.abbinaNoteInAttesa(tx, aziendaId, f!)).map((a) => pref + a));
           }
           importate.push(await this.load(tx, f!.id));
@@ -225,7 +248,7 @@ export class FattureService {
         // Le note abbinate dopo il loro inserimento vanno ricaricate per mostrare la fattura collegata.
         const fattureFinali: Fattura[] = [];
         for (const f of importate) fattureFinali.push(await this.load(tx, f.id)); // una query alla volta sulla transazione
-        return { fattura: fattureFinali[0]!, fatture: fattureFinali, duplicate, controparteCreata: creata, avvisi };
+        return { fattura: fattureFinali[0]!, fatture: fattureFinali, duplicate, ignorate, controparteCreata: creata, avvisi };
       });
     } catch (err) {
       duplicata(err);
@@ -297,12 +320,12 @@ export class FattureService {
 
   async registraPagamento(aziendaId: string, scadenzaId: string, input: PagamentoInput): Promise<Fattura> {
     return this.dbs.withTenant(aziendaId, async (tx) => {
-      const scadenza = await tx.query.scadenze.findFirst({
-        where: eq(scadenze.id, scadenzaId),
-        with: { pagamenti: { columns: { importoCents: true } } },
-      });
+      // Blocca la rata: due pagamenti in contemporanea non possono superarne l'importo.
+      const [scadenza] = await tx.select().from(scadenze).where(eq(scadenze.id, scadenzaId)).for('update');
       if (!scadenza) throw new NotFoundException('Scadenza non trovata');
-      const pagato = scadenza.pagamenti.reduce((s, p) => s + p.importoCents, 0);
+      const pagato = somma(
+        await tx.select({ importoCents: pagamenti.importoCents }).from(pagamenti).where(eq(pagamenti.scadenzaId, scadenzaId)),
+      );
       if (pagato + input.importoCents > scadenza.importoCents) {
         throw new BadRequestException(
           `Il pagamento supera il residuo della rata (${(scadenza.importoCents - pagato) / 100} euro)`,
@@ -367,6 +390,8 @@ export class FattureService {
     target: typeof fatture.$inferSelect,
   ): Promise<string[]> {
     await tx.update(fatture).set({ fatturaCollegataId: target.id }).where(eq(fatture.id, nota.id));
+    // Blocca le rate della fattura prima di leggerne i residui (vedi registraPagamento).
+    await tx.select({ id: scadenze.id }).from(scadenze).where(eq(scadenze.fatturaId, target.id)).for('update');
     const rate = await tx.query.scadenze.findMany({
       where: eq(scadenze.fatturaId, target.id),
       orderBy: desc(scadenze.dataScadenza),

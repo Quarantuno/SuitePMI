@@ -7,3 +7,4 @@ export * from './format';
 export * from './solleciti';
 export * from './cassa';
 export * from './csv';
+export * from './tipi-documento';

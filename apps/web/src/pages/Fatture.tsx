@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  etichettaTipoDocumento,
   formatData,
   formatEuro,
   parseEuroToCents,
@@ -24,7 +25,7 @@ interface EsitoImport {
   documenti?: number;
 }
 
-function descriviImport(r: ImportXmlResponse): string {
+function descriviImport(r: ImportXmlResponse & { fattura: Fattura }): string {
   const nuova = r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : '';
   const verso = r.fattura.direzione === 'attiva' ? 'emessi' : 'ricevuti';
   if (r.fatture.length > 1) {
@@ -35,7 +36,7 @@ function descriviImport(r: ImportXmlResponse): string {
     }, netto ${formatEuro(totale)}${nuova}`;
   }
   const f = r.fattura;
-  return `${f.notaDiCredito ? 'Nota di credito' : 'Fattura'} ${f.numero} (${f.direzione === 'attiva' ? 'emessa' : 'ricevuta'}) di ${formatEuro(f.totaleCents)}${nuova}`;
+  return `${etichettaTipoDocumento(f.tipoDocumento)} ${f.numero} (${f.direzione === 'attiva' ? 'emessa' : 'ricevuta'}) di ${formatEuro(f.totaleCents)}${nuova}`;
 }
 
 function ImportXml({ onDone }: { onDone: () => void }) {
@@ -53,13 +54,17 @@ function ImportXml({ onDone }: { onDone: () => void }) {
     for (const [i, doc] of documenti.entries()) {
       try {
         const r = await api<ImportXmlResponse>('/fatture/import-xml', { body: { ...doc.corpo, nomeFile: doc.nome } });
-        risultati.push({
-          file: doc.nome,
-          stato: 'ok',
-          messaggio: descriviImport(r),
-          avvisi: r.avvisi,
-          documenti: r.fatture.length,
-        });
+        risultati.push(
+          r.fattura
+            ? {
+                file: doc.nome,
+                stato: 'ok',
+                messaggio: descriviImport({ ...r, fattura: r.fattura }),
+                avvisi: r.avvisi,
+                documenti: r.fatture.length,
+              }
+            : { file: doc.nome, stato: 'ignorati', messaggio: 'documento solo fiscale, non importato', avvisi: r.avvisi },
+        );
       } catch (err) {
         const dettagli = err instanceof ApiError ? err.errori.map((e) => e.messaggio) : [];
         const gia = err instanceof ApiError && err.status === 409;
@@ -325,7 +330,10 @@ export function Fatture() {
               {q.data.map((f) => (
                 <tr key={f.id} className={f.notaDiCredito ? 'riga-nota' : undefined}>
                   <td>
-                    {f.numero} {f.notaDiCredito && <span className="badge badge-info">Nota di credito</span>}{' '}
+                    {f.numero}{' '}
+                    {f.tipoDocumento !== 'TD01' && (
+                      <span className={f.notaDiCredito ? 'badge badge-info' : 'badge'}>{etichettaTipoDocumento(f.tipoDocumento)}</span>
+                    )}{' '}
                     {f.origine === 'xml' && <span className="badge">XML</span>}
                   </td>
                   <td>{formatData(f.dataEmissione)}</td>
@@ -341,6 +349,11 @@ export function Fatture() {
                         fatture={q.data.filter((x) => !x.notaDiCredito && x.controparte.id === f.controparte.id)}
                         onDone={aggiorna}
                       />
+                    )}
+                    {f.tipoDocumento === 'TD05' && f.fatturaCollegata && (
+                      <div className="small">
+                        Integra la fattura <strong>{f.fatturaCollegata.numero}</strong>
+                      </div>
                     )}
                     <ul className="rate">
                       {f.scadenze.map((s) => (

@@ -42,10 +42,10 @@ export interface Fattura {
   controparte: { id: string; denominazione: string };
   scadenze: Scadenza[];
   origine: 'manuale' | 'xml';
-  /** Codice FatturaPA: TD01 fattura, TD04 nota di credito. */
+  /** Codice FatturaPA: TD01 fattura, TD04 nota di credito, TD05 nota di debito… (vedi TIPI_DOCUMENTO). */
   tipoDocumento: string;
   notaDiCredito: boolean;
-  /** Nota di credito: fattura rettificata. Fattura: note di credito ricevute. */
+  /** Nota di credito: fattura rettificata. Nota di debito: fattura integrata. */
   fatturaCollegata: { id: string; numero: string } | null;
   /** Nota di credito: quanto è stato effettivamente scalato dalla fattura collegata. */
   applicatoCents: number;
@@ -99,12 +99,14 @@ export interface CreditiScadutiResponse {
 }
 
 export interface ImportXmlResponse {
-  /** Il primo documento importato (comodo per i file con una sola fattura). */
-  fattura: Fattura;
+  /** Il primo documento importato (comodo per i file con una sola fattura); null se il file conteneva solo documenti ignorati. */
+  fattura: Fattura | null;
   /** Tutti i documenti importati: più di uno per i lotti. */
   fatture: Fattura[];
   /** Numeri dei documenti del lotto già registrati e quindi saltati. */
   duplicate: string[];
+  /** Documenti solo fiscali (integrazioni, autofatture) non importati. */
+  ignorate: { numero: string; tipoDocumento: string }[];
   controparteCreata: boolean;
   avvisi: string[];
 }

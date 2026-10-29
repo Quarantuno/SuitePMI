@@ -143,7 +143,7 @@ describe('modulo incassi', () => {
   it('importa una FatturaPA e crea il cliente', async () => {
     const res = await http.post('/api/fatture/import-xml').set(auth(a)).send({ xml }).expect(201);
     const body: ImportXmlResponse = res.body;
-    fattura = body.fattura;
+    fattura = body.fattura!;
     expect(body.controparteCreata).toBe(true);
     expect(fattura).toMatchObject({ direzione: 'attiva', numero: '2026/0042', totaleCents: 244_000, origine: 'xml' });
     expect(fattura.controparte.denominazione).toBe('Cliente Demo S.p.A.');
@@ -378,5 +378,48 @@ describe('fatture in lotto e semplificate', () => {
     ).expect(201);
     expect(res.body.controparteCreata).toBe(true);
     expect(res.body.fattura.controparte.denominazione).toBe('Mario Rossi');
+  });
+});
+
+describe('tipi di documento e pagamenti concorrenti', () => {
+  const importa = (x: string) => http.post('/api/fatture/import-xml').set(auth(a)).send({ xml: x });
+  const tipo = (x: string, td: string) => x.replace('<TipoDocumento>TD01</TipoDocumento>', `<TipoDocumento>${td}</TipoDocumento>`);
+
+  it('una nota di debito (TD05) ha rate proprie e resta collegata alla fattura', async () => {
+    await importa(variante(xml, { numero: 'D-80', data: '2026-04-01' })).expect(201);
+    const nd = variante(tipo(xml, 'TD05'), { numero: 'ND-1', data: '2026-04-10' }).replace(
+      '</DatiGeneraliDocumento>',
+      '</DatiGeneraliDocumento><DatiFattureCollegate><IdDocumento>D-80</IdDocumento><Data>2026-04-01</Data></DatiFattureCollegate>',
+    );
+    const res = await importa(nd).expect(201);
+    expect(res.body.fattura).toMatchObject({ tipoDocumento: 'TD05', notaDiCredito: false, fatturaCollegata: { numero: 'D-80' } });
+    expect(res.body.fattura.scadenze).toHaveLength(2);
+    expect(res.body.avvisi).toContain('Nota di debito collegata alla fattura D-80.');
+  });
+
+  it('integrazioni e autofatture non vengono importate', async () => {
+    const prima = (await http.get('/api/fatture').set(auth(a)).expect(200)).body.length;
+    const res = await importa(variante(tipo(xml, 'TD17'), { numero: 'INT-1' })).expect(201);
+    const body: ImportXmlResponse = res.body;
+    expect(body).toMatchObject({ fattura: null, fatture: [], ignorate: [{ numero: 'INT-1', tipoDocumento: 'TD17' }] });
+    expect(body.avvisi[0]).toMatch(/solo fiscale/);
+    expect((await http.get('/api/fatture').set(auth(a)).expect(200)).body.length).toBe(prima);
+
+    const misto = await importa(lotto(variante(xml, { numero: 'M-1', data: '2026-04-02' }), variante(tipo(xml, 'TD16'), { numero: 'INT-2' }))).expect(201);
+    expect(misto.body.fatture.map((f: Fattura) => f.numero)).toEqual(['M-1']);
+    expect(misto.body.ignorate).toEqual([{ numero: 'INT-2', tipoDocumento: 'TD16' }]);
+  });
+
+  it('due pagamenti in contemporanea non superano la rata', async () => {
+    const f: Fattura = (await importa(variante(xml, { numero: 'C-90', data: '2026-04-03' })).expect(201)).body.fattura;
+    const rata = f.scadenze[0]!;
+    const risposte = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        http.post(`/api/scadenze/${rata.id}/pagamenti`).set(auth(a)).send({ data: '2026-05-01', importoCents: rata.importoCents }),
+      ),
+    );
+    expect(risposte.map((r) => r.status).sort()).toEqual([201, 400, 400, 400, 400, 400]);
+    const dopo: Fattura = (await http.get(`/api/fatture/${f.id}`).set(auth(a)).expect(200)).body;
+    expect(dopo.scadenze[0]!.pagatoCents).toBe(rata.importoCents);
   });
 });

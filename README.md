@@ -39,7 +39,12 @@ Sono supportati anche:
   quelli già registrati vengono saltati (ed elencati) senza bloccare gli altri;
 - **fatture semplificate** (tracciato FSM10, art. 21-bis d.P.R. 633/1972): la TD07 diventa
   una fattura con scadenza a 30 giorni, la TD08 una nota di credito collegata tramite
-  `DatiFatturaRettificata`. Il cliente privato viene creato con il codice fiscale.
+  `DatiFatturaRettificata`. Il cliente privato viene creato con il codice fiscale;
+- **note di debito** (TD05): hanno rate proprie come una fattura e restano collegate
+  alla fattura che integrano; acconti, parcelle e fatture differite (TD02, TD03, TD06,
+  TD24–TD26) si comportano come fatture;
+- **integrazioni e autofatture** (TD16–TD23, TD27, TD28) vengono riconosciute e saltate:
+  servono all'IVA ma non sono crediti o debiti verso la controparte.
 
 Le **note di credito** (TD04) si importano come le fatture: se trovano la fattura
 indicata in `DatiFattureCollegate` ne riducono le rate aperte partendo dall'ultima,
@@ -160,6 +165,8 @@ e lo proietta settimana per settimana usando le rate aperte di fatture emesse
   In produzione dietro un proxy imposta `TRUST_PROXY=true`, altrimenti tutti gli utenti
   sembrano lo stesso IP.
 - Header di sicurezza HTTP con `helmet`.
+- Pagamenti e note di credito bloccano le rate (`SELECT … FOR UPDATE`): due incassi
+  registrati nello stesso istante non possono superare l'importo della rata.
 - Gli export CSV neutralizzano le formule (CSV injection) e sono pensati per Excel in
   italiano (separatore `;`, virgola decimale, UTF-8 con BOM).
 
@@ -194,5 +201,3 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 - Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.
-- Note di variazione in aumento (TD05) e autofatture (TD16–TD27) con le loro regole.
-- Blocco riga (`SELECT ... FOR UPDATE`) sui pagamenti concorrenti.
