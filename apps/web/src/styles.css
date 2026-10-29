@@ -290,3 +290,5 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 .riga-nota td { background: color-mix(in srgb, var(--accent-soft) 40%, transparent); }
 .nota-credito { display: flex; flex-direction: column; gap: 4px; }
 .nota-credito select { max-width: 220px; }
+.warn-text { color: var(--warn); margin: 8px 0 0; }
+.inline-field.spaziato { margin: 8px 0 12px; }

@@ -31,6 +31,14 @@ export function Clienti() {
       void qc.invalidateQueries({ queryKey: ['controparti'] });
     },
   });
+  const toggle = useMutation({
+    mutationFn: ({ id, valore }: { id: string; valore: boolean }) =>
+      api<Controparte>(`/controparti/${id}`, { method: 'PATCH', body: { sollecitiAutomatici: valore } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['controparti'] });
+      void qc.invalidateQueries({ queryKey: ['solleciti-piano'] });
+    },
+  });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     crea.mutate();
@@ -97,6 +105,7 @@ export function Clienti() {
                 <th>Tipo</th>
                 <th>Partita IVA</th>
                 <th>Contatti</th>
+                <th>Solleciti automatici</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +121,19 @@ export function Clienti() {
                     {c.pec && <div>PEC: {c.pec}</div>}
                     {c.email && <div>{c.email}</div>}
                     {c.telefono && <div>{c.telefono}</div>}
+                  </td>
+                  <td>
+                    {c.tipo !== 'fornitore' && (
+                      <label className="inline-field checkbox">
+                        <input
+                          type="checkbox"
+                          checked={c.sollecitiAutomatici}
+                          disabled={toggle.isPending}
+                          onChange={(e) => toggle.mutate({ id: c.id, valore: e.target.checked })}
+                        />
+                        {c.sollecitiAutomatici ? 'Sì' : 'Escluso'}
+                      </label>
+                    )}
                   </td>
                 </tr>
               ))}

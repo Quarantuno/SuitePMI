@@ -20,6 +20,7 @@ export interface Controparte {
   telefono: string | null;
   indirizzo: string | null;
   note: string | null;
+  sollecitiAutomatici: boolean;
   createdAt: string;
 }
 
@@ -121,6 +122,11 @@ export interface Azienda {
   iban: string | null;
   saldoCassaCents: number | null;
   saldoCassaAl: IsoDate | null;
+  sollecitiAutoAttivi: boolean;
+  sollecitiAutoGiorni: number;
+  sollecitiAutoLivelloMax: LivelloSollecitoApi;
+  /** Ultimo giorno in cui il giro automatico è stato eseguito. */
+  sollecitiAutoUltimaEsecuzione: IsoDate | null;
 }
 
 export type LivelloSollecitoApi = 'promemoria' | 'sollecito' | 'diffida';
@@ -141,7 +147,33 @@ export interface Sollecito {
   canale: CanaleSollecito | null;
   destinatario: string | null;
   inviatoIl: IsoDate | null;
+  /** Creato e inviato dal giro automatico. */
+  automatico: boolean;
   createdAt: string;
+}
+
+export type DecisioneSollecitoAuto =
+  | { azione: 'invia'; livello: LivelloSollecitoApi; canale: 'email' | 'pec'; destinatario: string; motivo: string }
+  | { azione: 'salta'; livello: LivelloSollecitoApi | null; motivo: string };
+
+export interface PianoSollecitiAuto {
+  data: IsoDate;
+  attivi: boolean;
+  righe: {
+    controparte: { id: string; denominazione: string };
+    /** Residuo delle rate scadute. */
+    scadutoCents: number;
+    giorniRitardoMax: number;
+    /** Cliente escluso a mano dai solleciti automatici. */
+    escluso: boolean;
+    decisione: DecisioneSollecitoAuto;
+  }[];
+}
+
+export interface EsitoSollecitiAuto {
+  data: IsoDate;
+  inviati: Sollecito[];
+  errori: { controparte: { id: string; denominazione: string }; messaggio: string }[];
 }
 
 export interface AnteprimaSollecito {

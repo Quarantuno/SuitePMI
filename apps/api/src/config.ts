@@ -37,6 +37,10 @@ export const config = {
   smtp: smtpConfig('SMTP'),
   /** PEC: in produzione è l'SMTP del gestore PEC. Se non configurata, l'invio PEC è disattivato. */
   pec: process.env.PEC_SMTP_HOST ? smtpConfig('PEC_SMTP') : null,
+  /** Giro giornaliero dei solleciti automatici: false per disattivarlo su questa istanza. */
+  sollecitiAutoScheduler: process.env.SOLLECITI_AUTO_SCHEDULER !== 'false',
+  /** Ora italiana (0-23) da cui parte il giro. */
+  sollecitiAutoOra: Number(process.env.SOLLECITI_AUTO_ORA ?? 9),
 };
 
 export interface SmtpConfig {

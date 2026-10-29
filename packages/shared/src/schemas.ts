@@ -57,6 +57,8 @@ export const controparteSchema = z.object({
   telefono: z.string().trim().optional(),
   indirizzo: z.string().trim().optional(),
   note: z.string().optional(),
+  /** false: il cliente è escluso dai solleciti automatici. */
+  sollecitiAutomatici: z.boolean().optional(),
 });
 export type ControparteInput = z.infer<typeof controparteSchema>;
 // Nessun default in modifica: un PATCH senza "tipo" non deve riportarlo a "cliente".
@@ -138,6 +140,10 @@ export const aziendaUpdateSchema = z.object({
   /** Saldo di cassa e banca alla data indicata (può essere negativo). */
   saldoCassaCents: z.number().int().min(-1e13).max(1e13).optional(),
   saldoCassaAl: isoDate.optional(),
+  /** Solleciti automatici: invio giornaliero secondo le regole di decidiSollecitoAutomatico. */
+  sollecitiAutoAttivi: z.boolean().optional(),
+  sollecitiAutoGiorni: z.number().int().min(1).max(365).optional(),
+  sollecitiAutoLivelloMax: z.enum(['promemoria', 'sollecito', 'diffida']).optional(),
 });
 export type AziendaUpdateInput = z.infer<typeof aziendaUpdateSchema>;
 

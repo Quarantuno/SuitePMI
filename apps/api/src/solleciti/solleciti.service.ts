@@ -40,6 +40,7 @@ function toSollecito(r: Row): Sollecito {
     canale: r.canale,
     destinatario: r.destinatario,
     inviatoIl: r.inviatoIl,
+    automatico: r.automatico,
     createdAt: r.createdAt.toISOString(),
   };
 }
@@ -93,7 +94,7 @@ export class SollecitiService {
   }
 
   /** Salva una bozza con il testo (eventualmente modificato) e la fotografia degli importi. */
-  async create(user: SessionUser, input: SollecitoCreateInput): Promise<Sollecito> {
+  async create(user: SessionUser, input: SollecitoCreateInput, opzioni: { automatico?: boolean } = {}): Promise<Sollecito> {
     const ctx = await this.contesto(user, input.controparteId, input.alla);
     const t = this.genera(ctx, input.livello, input.alla);
     return this.dbs.withTenant(user.aziendaId, async (tx) => {
@@ -112,6 +113,7 @@ export class SollecitiService {
           totaleCents: t.totaleCents,
           scadenzeIds: t.righe.map((r) => r.scadenzaId),
           creatoDa: user.utenteId,
+          automatico: opzioni.automatico ?? false,
         })
         .returning({ id: solleciti.id });
       return this.load(tx, row!.id);

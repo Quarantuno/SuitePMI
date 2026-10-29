@@ -15,6 +15,10 @@ export function toAzienda(a: typeof aziende.$inferSelect): Azienda {
     iban: a.iban,
     saldoCassaCents: a.saldoCassaCents,
     saldoCassaAl: a.saldoCassaAl,
+    sollecitiAutoAttivi: a.sollecitiAutoAttivi,
+    sollecitiAutoGiorni: a.sollecitiAutoGiorni,
+    sollecitiAutoLivelloMax: a.sollecitiAutoLivelloMax,
+    sollecitiAutoUltimaEsecuzione: a.sollecitiAutoUltimaEsecuzione,
   };
 }
 

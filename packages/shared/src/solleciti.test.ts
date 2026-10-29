@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aziendaUpdateSchema, isIbanValido } from './schemas';
-import { generaSollecito, SollecitoVuotoError, suggerisciLivello, type InputSollecito } from './solleciti';
+import { decidiSollecitoAutomatico, generaSollecito, SollecitoVuotoError, suggerisciLivello, type InputSollecito } from './solleciti';
 import type { RigaCredito } from './types';
 
 const riga = (over: Partial<RigaCredito>): RigaCredito => ({
@@ -137,5 +137,43 @@ describe('IBAN e dati azienda', () => {
   it('normalizza e permette di cancellare i campi', () => {
     const r = aziendaUpdateSchema.parse({ iban: 'it60 x054 2811 1010 0000 0123 456', pec: '' });
     expect(r).toEqual({ iban: 'IT60X0542811101000000123456', pec: null });
+  });
+});
+
+describe('decidiSollecitoAutomatico', () => {
+  const base = {
+    storico: [],
+    oggi: '2026-05-20',
+    giorniRitardoMax: 10,
+    impostazioni: { giorniPrimoContatto: 7, livelloMassimo: 'sollecito' as const },
+    contatti: { email: 'amm@cliente.it', pec: 'cliente@pec.it' },
+    pecDisponibile: true,
+  };
+
+  it('aspetta il ritardo minimo, poi manda un promemoria via email', () => {
+    expect(decidiSollecitoAutomatico({ ...base, giorniRitardoMax: 3 })).toMatchObject({ azione: 'salta', motivo: /dopo 7/ });
+    expect(decidiSollecitoAutomatico(base)).toMatchObject({ azione: 'invia', livello: 'promemoria', canale: 'email', destinatario: 'amm@cliente.it' });
+  });
+
+  it("rispetta l'attesa tra un livello e l'altro", () => {
+    const storico = [{ livello: 'promemoria' as const, inviatoIl: '2026-05-15' }];
+    expect(decidiSollecitoAutomatico({ ...base, storico })).toMatchObject({ azione: 'salta', motivo: /5 giorni fa/ });
+    expect(decidiSollecitoAutomatico({ ...base, storico, oggi: '2026-05-22' })).toMatchObject({ azione: 'invia', livello: 'sollecito' });
+  });
+
+  it('non supera il livello massimo e manda la diffida solo via PEC', () => {
+    const storico = [{ livello: 'sollecito' as const, inviatoIl: '2026-05-01' }];
+    expect(decidiSollecitoAutomatico({ ...base, storico })).toMatchObject({ azione: 'salta', livello: 'diffida', motivo: /a mano/ });
+    const tutto = { ...base, storico, impostazioni: { giorniPrimoContatto: 7, livelloMassimo: 'diffida' as const } };
+    expect(decidiSollecitoAutomatico(tutto)).toMatchObject({ azione: 'invia', livello: 'diffida', canale: 'pec' });
+    expect(decidiSollecitoAutomatico({ ...tutto, contatti: { email: 'a@b.it', pec: null } })).toMatchObject({ azione: 'salta', motivo: /PEC/ });
+    expect(decidiSollecitoAutomatico({ ...tutto, pecDisponibile: false })).toMatchObject({ azione: 'salta', motivo: /non è configurato/ });
+  });
+
+  it('dopo la diffida si ferma, e senza contatti non invia', () => {
+    const storico = [{ livello: 'diffida' as const, inviatoIl: '2026-01-01' }];
+    expect(decidiSollecitoAutomatico({ ...base, storico })).toMatchObject({ azione: 'salta', motivo: /avvocato/ });
+    expect(decidiSollecitoAutomatico({ ...base, contatti: { email: null, pec: null } })).toMatchObject({ azione: 'salta', motivo: /né email né PEC/ });
+    expect(decidiSollecitoAutomatico({ ...base, contatti: { email: null, pec: 'x@pec.it' } })).toMatchObject({ azione: 'invia', canale: 'pec' });
   });
 });

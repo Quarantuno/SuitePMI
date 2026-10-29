@@ -139,6 +139,25 @@ Dalla pagina **Crediti scaduti** clicchi **Sollecita** accanto a un cliente:
 Compila prima **Impostazioni** (indirizzo, email, PEC, IBAN): compaiono
 nell'intestazione e nelle coordinate di pagamento.
 
+### Solleciti automatici
+
+Da **Impostazioni → Solleciti automatici** l'azienda li attiva (spenti di default) e sceglie
+dopo quanti giorni di ritardo parte il primo contatto e fino a che livello può arrivare
+l'app da sola (default: sollecito formale). Ogni mattina dalle 9 ora italiana
+(`SOLLECITI_AUTO_ORA`) l'API fa il giro e, per ogni cliente in ritardo, invia il passo
+successivo firmato dal titolare. Le regole sono in `decidiSollecitoAutomatico`
+(`packages/shared/src/solleciti.ts`):
+
+- rispetta le attese tra un livello e l'altro (7 giorni dopo il promemoria, 10 dopo il sollecito);
+- non va oltre il livello massimo scelto; dopo una diffida si ferma (il passo dopo è l'avvocato);
+- la diffida parte solo via PEC, gli altri livelli via email (o PEC se manca l'email);
+- i clienti esclusi dalla pagina **Clienti** non ricevono nulla.
+
+La pagina **Solleciti** mostra il piano di oggi cliente per cliente, con il motivo di ogni
+invio o salto, e il pulsante **Invia ora**. Se un invio fallisce la bozza viene scartata e
+il giro del giorno dopo riprova. Lo scheduler è dentro l'API: con più istanze lascialo
+attivo su una sola (`SOLLECITI_AUTO_SCHEDULER=false` sulle altre).
+
 **Email e PEC in locale** finiscono in Mailpit: apri http://localhost:8025 per
 vederle. In produzione configura `SMTP_*` con il tuo provider e `PEC_SMTP_*` con
 l'SMTP del gestore PEC (senza `PEC_SMTP_HOST` l'invio PEC è disattivato). Nota:
@@ -193,11 +212,13 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET/DELETE | `/solleciti/:id` | Dettaglio ed eliminazione (solo bozze) |
 | GET | `/solleciti/:id/pdf` | Lettera in PDF |
 | POST | `/solleciti/:id/invia` | Invio email/PEC o registrazione di un invio manuale |
+| GET | `/solleciti/automatici/piano` | Cosa partirebbe oggi con i solleciti automatici, e perché |
+| POST | `/solleciti/automatici/esegui` | Esegue subito il giro di oggi |
 | GET | `/cassa/previsione?settimane=13&includiCreditiScaduti=false` | Previsione di cassa e scadenzario |
 
 ## Prossimi passi tecnici
 
 - Casella PEC e SMTP per singola azienda (oggi sono globali), con ricevute di accettazione e consegna.
-- Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
+- Pratica per il decreto ingiuntivo da passare all'avvocato (fatture, solleciti, ricevute PEC).
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.

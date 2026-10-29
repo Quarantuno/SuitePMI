@@ -43,6 +43,13 @@
       "when": 1792671611499,
       "tag": "0005_note_credito",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793265686508,
+      "tag": "0006_solleciti_automatici",
+      "breakpoints": true
     }
   ]
 }

@@ -20,7 +20,7 @@ export const TERMINE_GIORNI: Record<LivelloSollecito, number> = {
 };
 
 /** Attesa minima consigliata prima di passare al livello successivo. */
-const ATTESA_MINIMA_GIORNI: Record<LivelloSollecito, number> = {
+export const ATTESA_MINIMA_GIORNI: Record<LivelloSollecito, number> = {
   promemoria: 7,
   sollecito: 10,
   diffida: 15,
@@ -62,6 +62,65 @@ export function suggerisciLivello(
         motivo: `Diffida già inviata il ${formatData(ultimo.inviatoIl)}. Scaduto il termine, il passo successivo è il ricorso per decreto ingiuntivo tramite avvocato.`,
       };
   }
+}
+
+// --- Solleciti automatici -------------------------------------------------
+
+export interface ImpostazioniSollecitiAuto {
+  /** Giorni di ritardo prima del primo contatto automatico. */
+  giorniPrimoContatto: number;
+  /** Livello più alto che l'app può inviare da sola. */
+  livelloMassimo: LivelloSollecito;
+}
+
+export type DecisioneAutomatica =
+  | { azione: 'invia'; livello: LivelloSollecito; canale: 'email' | 'pec'; destinatario: string; motivo: string }
+  | { azione: 'salta'; livello: LivelloSollecito | null; motivo: string };
+
+/**
+ * Decide se oggi va inviato un sollecito automatico a un cliente, e quale.
+ * Prudente per scelta: rispetta le attese tra un livello e l'altro, non supera il
+ * livello massimo scelto dall'azienda e manda la diffida solo via PEC.
+ */
+export function decidiSollecitoAutomatico(p: {
+  storico: SollecitoPrecedente[];
+  oggi: IsoDate;
+  giorniRitardoMax: number;
+  impostazioni: ImpostazioniSollecitiAuto;
+  contatti: { email: string | null; pec: string | null };
+  pecDisponibile: boolean;
+}): DecisioneAutomatica {
+  const { impostazioni: imp } = p;
+  if (p.giorniRitardoMax < imp.giorniPrimoContatto) {
+    return { azione: 'salta', livello: null, motivo: `Ritardo di ${p.giorniRitardoMax} giorni: il primo contatto parte dopo ${imp.giorniPrimoContatto}.` };
+  }
+  const ultimo = [...p.storico].sort((a, b) => b.inviatoIl.localeCompare(a.inviatoIl))[0];
+  if (ultimo?.livello === 'diffida') {
+    return { azione: 'salta', livello: null, motivo: 'Diffida già inviata: il passo successivo va deciso con un avvocato.' };
+  }
+  if (ultimo) {
+    const attesa = ATTESA_MINIMA_GIORNI[ultimo.livello];
+    const trascorsi = daysBetween(ultimo.inviatoIl, p.oggi);
+    if (trascorsi < attesa) {
+      return {
+        azione: 'salta',
+        livello: null,
+        motivo: `${ETICHETTA_LIVELLO[ultimo.livello]} inviato ${trascorsi === 0 ? 'oggi' : `${trascorsi} giorni fa`}: si attendono ${attesa} giorni.`,
+      };
+    }
+  }
+  const { livello, motivo } = suggerisciLivello(p.storico, p.oggi, p.giorniRitardoMax);
+  if (LIVELLI_SOLLECITO.indexOf(livello) > LIVELLI_SOLLECITO.indexOf(imp.livelloMassimo)) {
+    return { azione: 'salta', livello, motivo: `Il prossimo passo è: ${ETICHETTA_LIVELLO[livello].toLowerCase()}, da inviare a mano.` };
+  }
+  if (livello === 'diffida') {
+    if (!p.contatti.pec) return { azione: 'salta', livello, motivo: 'Diffida pronta ma il cliente non ha una PEC in anagrafica.' };
+    if (!p.pecDisponibile) return { azione: 'salta', livello, motivo: 'Diffida pronta ma l\'invio PEC non è configurato sul server.' };
+    return { azione: 'invia', livello, canale: 'pec', destinatario: p.contatti.pec, motivo };
+  }
+  if (p.contatti.email) return { azione: 'invia', livello, canale: 'email', destinatario: p.contatti.email, motivo };
+  if (p.contatti.pec && p.pecDisponibile) return { azione: 'invia', livello, canale: 'pec', destinatario: p.contatti.pec, motivo };
+  return { azione: 'salta', livello, motivo: 'Il cliente non ha né email né PEC in anagrafica.' };
 }
 
 // --- Generazione del testo -------------------------------------------------

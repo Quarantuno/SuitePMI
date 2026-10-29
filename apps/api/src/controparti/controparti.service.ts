@@ -19,6 +19,7 @@ export function toControparte(r: Row): Controparte {
     telefono: r.telefono,
     indirizzo: r.indirizzo,
     note: r.note,
+    sollecitiAutomatici: r.sollecitiAutomatici,
     createdAt: r.createdAt.toISOString(),
   };
 }

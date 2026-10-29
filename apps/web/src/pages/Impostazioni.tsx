@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Azienda } from '@suite/shared';
+import { ETICHETTA_LIVELLO, formatData, LIVELLI_SOLLECITO, type Azienda, type LivelloSollecito } from '@suite/shared';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { Button, ErrorBox, Field, fieldError, PageHeader } from '../ui';
+import { Link } from 'react-router-dom';
+import { Button, ErrorBox, Field, fieldError, PageHeader, Select } from '../ui';
 
 const campi = ['ragioneSociale', 'indirizzo', 'email', 'pec', 'iban'] as const;
 type Form = Record<(typeof campi)[number], string>;
@@ -70,6 +71,88 @@ export function Impostazioni() {
           </Button>
         </div>
       </form>
+      {q.data && <SollecitiAutomatici azienda={q.data} />}
     </>
+  );
+}
+
+function SollecitiAutomatici({ azienda }: { azienda: Azienda }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    attivi: azienda.sollecitiAutoAttivi,
+    giorni: String(azienda.sollecitiAutoGiorni),
+    livelloMax: azienda.sollecitiAutoLivelloMax as LivelloSollecito,
+  });
+  const [salvato, setSalvato] = useState(false);
+  const m = useMutation({
+    mutationFn: () =>
+      api<Azienda>('/azienda', {
+        method: 'PATCH',
+        body: { sollecitiAutoAttivi: form.attivi, sollecitiAutoGiorni: Number(form.giorni), sollecitiAutoLivelloMax: form.livelloMax },
+      }),
+    onSuccess: (a) => {
+      qc.setQueryData(['azienda'], a);
+      void qc.invalidateQueries({ queryKey: ['solleciti-piano'] });
+      setSalvato(true);
+    },
+  });
+  const cambia = (f: Partial<typeof form>) => {
+    setSalvato(false);
+    setForm({ ...form, ...f });
+  };
+
+  return (
+    <form
+      className="card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        m.mutate();
+      }}
+    >
+      <h2>Solleciti automatici</h2>
+      <p className="muted small">
+        Ogni mattina alle 9 l'app controlla i crediti scaduti e invia da sola il passo successivo a ogni cliente: prima un
+        promemoria, poi il sollecito formale, rispettando le attese tra un invio e l'altro. Puoi escludere singoli clienti
+        dalla pagina <Link to="/clienti">Clienti</Link> e vedere cosa partirà oggi in <Link to="/solleciti">Solleciti</Link>.
+      </p>
+      <label className="inline-field checkbox spaziato">
+        <input type="checkbox" checked={form.attivi} onChange={(e) => cambia({ attivi: e.target.checked })} />
+        Attiva i solleciti automatici
+      </label>
+      <div className="grid-2">
+        <Field
+          label="Primo contatto dopo (giorni di ritardo)"
+          type="number"
+          min={1}
+          max={365}
+          value={form.giorni}
+          onChange={(e) => cambia({ giorni: e.target.value })}
+          error={fieldError(m.error, 'sollecitiAutoGiorni')}
+        />
+        <Select label="Fino a" value={form.livelloMax} onChange={(e) => cambia({ livelloMax: e.target.value as LivelloSollecito })}>
+          {LIVELLI_SOLLECITO.map((l) => (
+            <option key={l} value={l}>
+              {ETICHETTA_LIVELLO[l]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {form.livelloMax === 'diffida' && (
+        <p className="small warn-text">
+          La diffida automatica parte solo via PEC e vale come costituzione in mora: attivala solo se sei sicuro dei dati delle
+          fatture e dei clienti.
+        </p>
+      )}
+      {m.error && !fieldError(m.error, 'sollecitiAutoGiorni') && <ErrorBox error={m.error} />}
+      <div className="form-actions">
+        {azienda.sollecitiAutoUltimaEsecuzione && (
+          <span className="muted small saved">Ultimo giro: {formatData(azienda.sollecitiAutoUltimaEsecuzione)}</span>
+        )}
+        {salvato && <span className="muted small saved">Salvato</span>}
+        <Button type="submit" disabled={m.isPending}>
+          Salva
+        </Button>
+      </div>
+    </form>
   );
 }

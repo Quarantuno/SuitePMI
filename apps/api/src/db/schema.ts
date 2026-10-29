@@ -1,6 +1,8 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
+  integer,
   type AnyPgColumn,
   date,
   index,
@@ -33,6 +35,13 @@ export const aziende = pgTable('aziende', {
   // Saldo di cassa/banca dichiarato dall'utente, base della previsione di cassa
   saldoCassaCents: cents('saldo_cassa_cents'),
   saldoCassaAl: date('saldo_cassa_al', { mode: 'string' }),
+  // Solleciti automatici (giro giornaliero)
+  sollecitiAutoAttivi: boolean('solleciti_auto_attivi').notNull().default(false),
+  sollecitiAutoGiorni: integer('solleciti_auto_giorni').notNull().default(7),
+  sollecitiAutoLivelloMax: text('solleciti_auto_livello_max', { enum: ['promemoria', 'sollecito', 'diffida'] })
+    .notNull()
+    .default('sollecito'),
+  sollecitiAutoUltimaEsecuzione: date('solleciti_auto_ultima_esecuzione', { mode: 'string' }),
   createdAt: createdAt(),
 });
 
@@ -80,6 +89,7 @@ export const controparti = pgTable(
     telefono: text('telefono'),
     indirizzo: text('indirizzo'),
     note: text('note'),
+    sollecitiAutomatici: boolean('solleciti_automatici').notNull().default(true),
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -174,6 +184,7 @@ export const solleciti = pgTable(
     destinatario: text('destinatario'),
     inviatoIl: date('inviato_il', { mode: 'string' }),
     creatoDa: uuid('creato_da').references(() => utenti.id, { onDelete: 'set null' }),
+    automatico: boolean('automatico').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index('solleciti_controparte_idx').on(t.aziendaId, t.controparteId)],
