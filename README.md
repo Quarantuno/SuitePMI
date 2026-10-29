@@ -33,9 +33,18 @@ Apri http://localhost:5173, registra la tua azienda e importa le fatture da **Fa
 file XML, firmati `.p7m` (DER, BER o base64) oppure interi archivi `.zip` come quelli
 scaricati dal cassetto fiscale (i file di metadati `_MT_` vengono ignorati).
 
+Sono supportati anche:
+
+- **fatture in lotto**: un file con più `FatturaElettronicaBody` importa tutti i documenti;
+  quelli già registrati vengono saltati (ed elencati) senza bloccare gli altri;
+- **fatture semplificate** (tracciato FSM10, art. 21-bis d.P.R. 633/1972): la TD07 diventa
+  una fattura con scadenza a 30 giorni, la TD08 una nota di credito collegata tramite
+  `DatiFatturaRettificata`. Il cliente privato viene creato con il codice fiscale.
+
 Le **note di credito** (TD04) si importano come le fatture: se trovano la fattura
 indicata in `DatiFattureCollegate` ne riducono le rate aperte partendo dall'ultima,
-altrimenti restano "da abbinare" e le colleghi a mano dalla lista. Sulla parte
+altrimenti restano "da abbinare": vengono collegate in automatico quando importi la
+fattura indicata, oppure le colleghi a mano dalla lista. Sulla parte
 stornata non si calcolano interessi di mora, e un'eventuale eccedenza viene segnalata.
 Un file di prova e in `apps/api/test/fixtures/fattura-attiva.xml`: funziona se ti
 registri con la partita IVA `12345678903`.
@@ -166,7 +175,7 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET/POST | `/controparti` | Elenco (`?q=`, `?tipo=`) e creazione |
 | GET/PATCH/DELETE | `/controparti/:id` | Dettaglio, modifica, eliminazione |
 | GET/POST | `/fatture` | Elenco (`?direzione=attiva\|passiva`) e fattura manuale |
-| POST | `/fatture/import-xml` | Import FatturaPA (`{ "xml": "..." }` oppure `{ "p7mBase64": "..." }`) |
+| POST | `/fatture/import-xml` | Import FatturaPA, anche in lotto o semplificata (`{ "xml": "..." }` oppure `{ "p7mBase64": "..." }`) |
 | GET/DELETE | `/fatture/:id` | Dettaglio ed eliminazione |
 | POST | `/fatture/:id/collega` | Abbina una nota di credito alla fattura (`{ "fatturaId": "..." }`) |
 | POST | `/scadenze/:id/pagamenti` | Registra un incasso o pagamento |
@@ -185,5 +194,5 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 - Solleciti automatici programmati e pratica per il decreto ingiuntivo da passare all'avvocato.
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.
-- Fatture in lotto (più fatture nello stesso file) e note di credito semplificate (TD08).
+- Note di variazione in aumento (TD05) e autofatture (TD16–TD27) con le loro regole.
 - Blocco riga (`SELECT ... FOR UPDATE`) sui pagamenti concorrenti.

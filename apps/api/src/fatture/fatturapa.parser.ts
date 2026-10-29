@@ -39,6 +39,7 @@ export class FatturaPAError extends Error {}
 
 const ARRAY_TAGS = new Set([
   'FatturaElettronicaBody',
+  'DatiBeniServizi',
   'DatiPagamento',
   'DettaglioPagamento',
   'DatiRiepilogo',
@@ -117,79 +118,31 @@ function data(value: unknown, campo: string): IsoDate {
   return s;
 }
 
-export function parseFatturaPA(xml: string): FatturaPAParsed {
+function leggiXml(xml: string): Node {
   let doc: unknown;
   try {
     doc = parser.parse(xml);
   } catch {
     throw new FatturaPAError('Il file non è un XML valido');
   }
-  const root = obj(path(doc, 'FatturaElettronica'));
-  if (!root) throw new FatturaPAError('Il file non è una FatturaPA (manca FatturaElettronica)');
+  const d = obj(doc);
+  if (!d) throw new FatturaPAError('Il file non è un XML valido');
+  return d;
+}
 
-  const avvisi: string[] = [];
-  const header = obj(root.FatturaElettronicaHeader);
-  const bodies = (root.FatturaElettronicaBody as unknown[] | undefined) ?? [];
-  if (!header || bodies.length === 0) throw new FatturaPAError('Header o body della fattura mancanti');
-  if (bodies.length > 1) {
-    avvisi.push(`Il file contiene ${bodies.length} fatture (lotto): importata solo la prima.`);
-  }
-  const body = bodies[0];
+function totaleDaRiepilogo(body: unknown, avvisi: string[]): number {
+  // DatiBeniServizi è una lista (nelle semplificate si ripete): raccogliamo tutti i riepiloghi.
+  const blocchi = (path(body, 'DatiBeniServizi') as unknown[] | undefined) ?? [];
+  const riepiloghi = blocchi.flatMap((b) => (path(b, 'DatiRiepilogo') as unknown[] | undefined) ?? []);
+  avvisi.push('ImportoTotaleDocumento assente: totale calcolato dal riepilogo IVA.');
+  return riepiloghi.reduce<number>(
+    (s, r) => s + euro(path(r, 'ImponibileImporto'), 'ImponibileImporto') + euro(path(r, 'Imposta'), 'Imposta'),
+    0,
+  );
+}
 
-  const cedente = soggetto(header.CedentePrestatore, 'cedente/prestatore');
-  const cessionario = soggetto(header.CessionarioCommittente, 'cessionario/committente');
-  const pecDestinatario = str(path(header, 'DatiTrasmissione', 'PECDestinatario')) ?? null;
-
-  const dgd = obj(path(body, 'DatiGenerali', 'DatiGeneraliDocumento'));
-  if (!dgd) throw new FatturaPAError('DatiGeneraliDocumento mancanti');
-  const tipoDocumento = str(dgd.TipoDocumento) ?? 'TD01';
-  if (tipoDocumento === 'TD08') {
-    throw new FatturaPAError('Le note di credito semplificate (TD08) non sono ancora supportate');
-  }
-  const notaDiCredito = tipoDocumento === 'TD04';
-  const numero = str(dgd.Numero);
-  if (!numero) throw new FatturaPAError('Numero fattura mancante');
-  const dataDoc = data(dgd.Data, 'Data documento');
-  const divisa = str(dgd.Divisa) ?? 'EUR';
-  if (divisa !== 'EUR') avvisi.push(`Fattura in ${divisa}: gli importi sono trattati come euro.`);
-
-  // Fattura a cui si riferisce la nota di credito (DatiFattureCollegate)
-  const collegate = ((path(body, 'DatiGenerali', 'DatiFattureCollegate') as unknown[] | undefined) ?? [])
-    .map((c) => ({ numero: str(path(c, 'IdDocumento')), data: str(path(c, 'Data')) ?? null }))
-    .filter((c): c is { numero: string; data: string | null } => !!c.numero);
-
-  let totaleCents: number;
-  if (str(dgd.ImportoTotaleDocumento)) {
-    totaleCents = euro(dgd.ImportoTotaleDocumento, 'ImportoTotaleDocumento');
-  } else {
-    const riepiloghi = (path(body, 'DatiBeniServizi', 'DatiRiepilogo') as unknown[] | undefined) ?? [];
-    totaleCents = riepiloghi.reduce<number>(
-      (s, r) => s + euro(path(r, 'ImponibileImporto'), 'ImponibileImporto') + euro(path(r, 'Imposta'), 'Imposta'),
-      0,
-    );
-    avvisi.push('ImportoTotaleDocumento assente: totale calcolato dal riepilogo IVA.');
-  }
-
-  // Alcuni software scrivono le note di credito con importi negativi: conta il valore assoluto.
-  totaleCents = Math.abs(totaleCents);
-
+function leggiScadenze(body: unknown, dataDoc: IsoDate, totaleCents: number, avvisi: string[]) {
   const scadenze: FatturaPAParsed['scadenze'] = [];
-  if (notaDiCredito) {
-    if (collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
-    return {
-      tipoDocumento,
-      numero,
-      data: dataDoc,
-      divisa,
-      totaleCents,
-      cedente,
-      cessionario,
-      pecDestinatario,
-      scadenze,
-      collegate,
-      avvisi,
-    };
-  }
   const datiPagamento = (obj(body)?.DatiPagamento as unknown[] | undefined) ?? [];
   for (const dp of datiPagamento) {
     const dettagli = (obj(dp)?.DettaglioPagamento as unknown[] | undefined) ?? [];
@@ -219,18 +172,141 @@ export function parseFatturaPA(xml: string): FatturaPAParsed {
   if (sommaRate !== totaleCents) {
     avvisi.push('Le rate non coincidono con il totale (es. ritenuta o split payment): usiamo le rate indicate.');
   }
+  return scadenze;
+}
 
+/** Fattura ordinaria (FPA12/FPR12): uno o più body (lotto) con lo stesso header. */
+function leggiOrdinaria(root: Node): FatturaPAParsed[] {
+  const header = obj(root.FatturaElettronicaHeader);
+  const bodies = (root.FatturaElettronicaBody as unknown[] | undefined) ?? [];
+  if (!header || bodies.length === 0) throw new FatturaPAError('Header o body della fattura mancanti');
+
+  const cedente = soggetto(header.CedentePrestatore, 'cedente/prestatore');
+  const cessionario = soggetto(header.CessionarioCommittente, 'cessionario/committente');
+  const pecDestinatario = str(path(header, 'DatiTrasmissione', 'PECDestinatario')) ?? null;
+
+  return bodies.map((body, i) => {
+    const avvisi: string[] = [];
+    const dgd = obj(path(body, 'DatiGenerali', 'DatiGeneraliDocumento'));
+    if (!dgd) throw new FatturaPAError(`DatiGeneraliDocumento mancanti (documento ${i + 1})`);
+    const tipoDocumento = str(dgd.TipoDocumento) ?? 'TD01';
+    const numero = str(dgd.Numero);
+    if (!numero) throw new FatturaPAError('Numero fattura mancante');
+    const dataDoc = data(dgd.Data, 'Data documento');
+    const divisa = str(dgd.Divisa) ?? 'EUR';
+    if (divisa !== 'EUR') avvisi.push(`Fattura in ${divisa}: gli importi sono trattati come euro.`);
+
+    const collegate = ((path(body, 'DatiGenerali', 'DatiFattureCollegate') as unknown[] | undefined) ?? [])
+      .map((c) => ({ numero: str(path(c, 'IdDocumento')), data: str(path(c, 'Data')) ?? null }))
+      .filter((c): c is { numero: string; data: string | null } => !!c.numero);
+
+    // Alcuni software scrivono le note di credito con importi negativi: conta il valore assoluto.
+    const totaleCents = Math.abs(
+      str(dgd.ImportoTotaleDocumento)
+        ? euro(dgd.ImportoTotaleDocumento, 'ImportoTotaleDocumento')
+        : totaleDaRiepilogo(body, avvisi),
+    );
+
+    const notaDiCredito = tipoDocumento === 'TD04';
+    if (notaDiCredito && collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
+    return {
+      tipoDocumento,
+      numero,
+      data: dataDoc,
+      divisa,
+      totaleCents,
+      cedente,
+      cessionario,
+      pecDestinatario,
+      scadenze: notaDiCredito ? [] : leggiScadenze(body, dataDoc, totaleCents, avvisi),
+      collegate,
+      avvisi,
+    };
+  });
+}
+
+/**
+ * Fattura semplificata (FSM10, art. 21-bis d.P.R. 633/1972): TD07 fattura, TD08 nota di credito.
+ * Struttura diversa: soggetti senza DatiAnagrafici, importi per riga IVA inclusa, nessun dato di pagamento.
+ */
+function soggettoSemplificato(node: unknown, ruolo: string): SoggettoFattura {
+  const n = obj(node);
+  if (!n) throw new FatturaPAError(`Dati del ${ruolo} mancanti`);
+  const id = obj(n.IdentificativiFiscali) ?? n;
+  const altri = obj(n.AltriDatiIdentificativi) ?? n;
+  const denominazione =
+    str(altri.Denominazione) ?? [str(altri.Nome), str(altri.Cognome)].filter(Boolean).join(' ');
+  const codiceFiscale = str(id.CodiceFiscale) ?? null;
+  if (!denominazione && !codiceFiscale) throw new FatturaPAError(`Denominazione del ${ruolo} mancante`);
+  const idPaese = str(path(id, 'IdFiscaleIVA', 'IdPaese'));
+  const idCodice = str(path(id, 'IdFiscaleIVA', 'IdCodice'));
+  const sede = obj(altri.Sede);
+  const indirizzo = sede
+    ? [[str(sede.Indirizzo), str(sede.NumeroCivico)].filter(Boolean).join(' '), [str(sede.CAP), str(sede.Comune)].filter(Boolean).join(' ')]
+        .filter(Boolean)
+        .join(', ')
+    : null;
   return {
-    tipoDocumento,
-    numero,
-    data: dataDoc,
-    divisa,
-    totaleCents,
-    cedente,
-    cessionario,
-    pecDestinatario,
-    scadenze,
-    collegate,
-    avvisi,
+    denominazione: denominazione || `Cliente ${codiceFiscale}`,
+    partitaIva: idCodice && (!idPaese || idPaese === 'IT') ? idCodice : null,
+    codiceFiscale,
+    indirizzo: indirizzo || null,
   };
+}
+
+function leggiSemplificata(root: Node): FatturaPAParsed[] {
+  const header = obj(root.FatturaElettronicaHeader);
+  const bodies = (root.FatturaElettronicaBody as unknown[] | undefined) ?? [];
+  if (!header || bodies.length === 0) throw new FatturaPAError('Header o body della fattura mancanti');
+  const cedente = soggettoSemplificato(header.CedentePrestatore, 'cedente/prestatore');
+  const cessionario = soggettoSemplificato(header.CessionarioCommittente, 'cessionario/committente');
+  const pecDestinatario = str(path(header, 'DatiTrasmissione', 'PECDestinatario')) ?? null;
+
+  return bodies.map((body) => {
+    const avvisi: string[] = [];
+    const dgd = obj(path(body, 'DatiGenerali', 'DatiGeneraliDocumento'));
+    if (!dgd) throw new FatturaPAError('DatiGeneraliDocumento mancanti');
+    const tipo = str(dgd.TipoDocumento) ?? 'TD07';
+    const numero = str(dgd.Numero);
+    if (!numero) throw new FatturaPAError('Numero fattura mancante');
+    const dataDoc = data(dgd.Data, 'Data documento');
+    const righe = (path(body, 'DatiBeniServizi') as unknown[] | undefined) ?? [];
+    const totaleCents = Math.abs(righe.reduce<number>((s, r) => s + euro(path(r, 'Importo'), 'Importo'), 0));
+    const rettificata = obj(path(body, 'DatiGenerali', 'DatiFatturaRettificata'));
+    const collegate = str(rettificata?.NumeroFR)
+      ? [{ numero: str(rettificata!.NumeroFR)!, data: str(rettificata!.DataFR) ?? null }]
+      : [];
+    // Per il resto dell'app una semplificata è una fattura (TD01) o una nota di credito (TD04).
+    const notaDiCredito = tipo === 'TD08';
+    if (notaDiCredito && collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
+    avvisi.push(`Fattura semplificata (${tipo}).`);
+    return {
+      tipoDocumento: notaDiCredito ? 'TD04' : 'TD01',
+      numero,
+      data: dataDoc,
+      divisa: str(dgd.Divisa) ?? 'EUR',
+      totaleCents,
+      cedente,
+      cessionario,
+      pecDestinatario,
+      scadenze: notaDiCredito ? [] : leggiScadenze(body, dataDoc, totaleCents, avvisi),
+      collegate,
+      avvisi,
+    };
+  });
+}
+
+/** Tutti i documenti del file: uno per una fattura singola, più di uno per un lotto. */
+export function parseFatturaPALotto(xml: string): FatturaPAParsed[] {
+  const doc = leggiXml(xml);
+  const ordinaria = obj(doc.FatturaElettronica);
+  if (ordinaria) return leggiOrdinaria(ordinaria);
+  const semplificata = obj(doc.FatturaElettronicaSemplificata);
+  if (semplificata) return leggiSemplificata(semplificata);
+  throw new FatturaPAError('Il file non è una FatturaPA (manca FatturaElettronica)');
+}
+
+/** Il primo documento del file (comodo nei test e per i file con una sola fattura). */
+export function parseFatturaPA(xml: string): FatturaPAParsed {
+  return parseFatturaPALotto(xml)[0]!;
 }

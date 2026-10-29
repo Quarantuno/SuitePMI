@@ -9,6 +9,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { configureApp } from '../src/app.factory';
 import { notaDiCredito } from './note-credito';
+import { lotto, semplificata, variante } from './xml-builder';
 import { AppModule } from '../src/app.module';
 
 const xml = readFileSync(join(__dirname, 'fixtures/fattura-attiva.xml'), 'utf8');
@@ -310,5 +311,72 @@ describe('note di credito', () => {
     for (const n of note) await http.delete(`/api/fatture/${n.id}`).set(auth(a)).expect(204);
     const f: Fattura = (await http.get(`/api/fatture/${fattura.id}`).set(auth(a)).expect(200)).body;
     expect(f.scadenze.map((r) => r.stornatoCents)).toEqual([0, 0]);
+  });
+});
+
+describe('fatture in lotto e semplificate', () => {
+  const importa = (x: string) => http.post('/api/fatture/import-xml').set(auth(a)).send({ xml: x });
+  const fatturaDa = async (id: string): Promise<Fattura> => (await http.get(`/api/fatture/${id}`).set(auth(a)).expect(200)).body;
+  const primo = variante(xml, { numero: 'L-50', data: '2026-01-20' });
+  const secondo = variante(xml, { numero: 'L-51', data: '2026-01-21' });
+  // La nota viene prima della sua fattura nel file: l'import la applica comunque.
+  const nota = notaDiCredito(xml, { numero: 'NC-L1', data: '2026-01-25', importo: '200.00', rif: 'L-51', rifData: '2026-01-21' });
+
+  it('importa tutti i documenti di un lotto', async () => {
+    const res = await importa(lotto(primo, nota, secondo)).expect(201);
+    const body: ImportXmlResponse = res.body;
+    expect(body.fatture.map((f) => f.numero)).toEqual(['L-50', 'L-51', 'NC-L1']);
+    expect(body.duplicate).toEqual([]);
+    expect(body.avvisi).toContain('NC-L1: Nota di credito applicata alla fattura L-51.');
+    expect(body.fatture[2]).toMatchObject({ notaDiCredito: true, applicatoCents: 20_000 });
+    expect(body.fatture[2]!.fatturaCollegata?.numero).toBe('L-51');
+  });
+
+  it('salta i documenti già registrati senza bloccare gli altri', async () => {
+    const nuovo = variante(xml, { numero: 'L-52', data: '2026-01-22' });
+    const res = await importa(lotto(primo, secondo, nuovo)).expect(201);
+    expect(res.body.fatture.map((f: Fattura) => f.numero)).toEqual(['L-52']);
+    expect(res.body.duplicate).toEqual(['L-50', 'L-51']);
+    expect(res.body.avvisi.join(' ')).toMatch(/Già registrate, saltate: L-50, L-51/);
+    await importa(lotto(primo, secondo)).expect(409);
+    await importa(primo).expect(409);
+  });
+
+  it('abbina in automatico una nota arrivata prima della fattura', async () => {
+    const nc = await importa(notaDiCredito(xml, { numero: 'NC-L2', data: '2026-02-01', importo: '100.00', rif: 'L-60', rifData: '2026-01-30' })).expect(201);
+    expect(nc.body.fattura.fatturaCollegata).toBeNull();
+    expect(nc.body.avvisi.join(' ')).toMatch(/verrà abbinata quando la importi/);
+
+    const f = await importa(variante(xml, { numero: 'L-60', data: '2026-01-30' })).expect(201);
+    expect(f.body.avvisi).toContain('Nota di credito NC-L2 abbinata automaticamente.');
+    expect(f.body.fattura.scadenze.map((r: Fattura['scadenze'][number]) => r.stornatoCents)).toEqual([0, 10_000]);
+    expect((await fatturaDa(nc.body.fattura.id)).fatturaCollegata?.numero).toBe('L-60');
+  });
+
+  it('non abbina note che indicano un\'altra data', async () => {
+    await importa(notaDiCredito(xml, { numero: 'NC-L3', data: '2026-02-05', importo: '50.00', rif: 'L-70', rifData: '2025-12-31' })).expect(201);
+    const f = await importa(variante(xml, { numero: 'L-70', data: '2026-02-03' })).expect(201);
+    expect(f.body.avvisi.join(' ')).not.toMatch(/abbinata automaticamente/);
+  });
+
+  it('importa fatture e note di credito semplificate', async () => {
+    const f = await importa(semplificata({ numero: 'S-1', data: '2026-03-02', righe: ['122.00', '61.00'] })).expect(201);
+    expect(f.body.fattura).toMatchObject({ tipoDocumento: 'TD01', direzione: 'attiva', totaleCents: 18_300 });
+    expect(f.body.fattura.scadenze).toMatchObject([{ dataScadenza: '2026-04-01', importoCents: 18_300 }]);
+    expect(f.body.controparteCreata).toBe(false);
+
+    const n = await importa(
+      semplificata({ tipo: 'TD08', numero: 'NS-1', data: '2026-03-10', righe: ['-30.50'], rif: { numero: 'S-1', data: '2026-03-02' } }),
+    ).expect(201);
+    expect(n.body.fattura).toMatchObject({ notaDiCredito: true, applicatoCents: 3_050 });
+    expect((await fatturaDa(f.body.fattura.id)).scadenze[0]!.stornatoCents).toBe(3_050);
+  });
+
+  it('una semplificata verso un privato crea il cliente con il codice fiscale', async () => {
+    const res = await importa(
+      semplificata({ numero: 'S-2', data: '2026-03-03', righe: ['80.00'], cessionario: { cf: 'RSSMRA80A01H501U', nome: 'Mario', cognome: 'Rossi' } }),
+    ).expect(201);
+    expect(res.body.controparteCreata).toBe(true);
+    expect(res.body.fattura.controparte.denominazione).toBe('Mario Rossi');
   });
 });

@@ -20,6 +20,22 @@ interface EsitoImport {
   stato: 'ok' | 'ko' | 'gia' | 'ignorati';
   messaggio: string;
   avvisi: string[];
+  /** Documenti importati dal file: più di uno per un lotto. */
+  documenti?: number;
+}
+
+function descriviImport(r: ImportXmlResponse): string {
+  const nuova = r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : '';
+  const verso = r.fattura.direzione === 'attiva' ? 'emessi' : 'ricevuti';
+  if (r.fatture.length > 1) {
+    const totale = r.fatture.reduce((s, f) => s + (f.notaDiCredito ? -f.totaleCents : f.totaleCents), 0);
+    const note = r.fatture.filter((f) => f.notaDiCredito).length;
+    return `Lotto: ${r.fatture.length} documenti ${verso} (${r.fatture.map((f) => f.numero).join(', ')})${
+      note > 0 ? `, di cui ${note === 1 ? '1 nota' : `${note} note`} di credito` : ''
+    }, netto ${formatEuro(totale)}${nuova}`;
+  }
+  const f = r.fattura;
+  return `${f.notaDiCredito ? 'Nota di credito' : 'Fattura'} ${f.numero} (${f.direzione === 'attiva' ? 'emessa' : 'ricevuta'}) di ${formatEuro(f.totaleCents)}${nuova}`;
 }
 
 function ImportXml({ onDone }: { onDone: () => void }) {
@@ -40,8 +56,9 @@ function ImportXml({ onDone }: { onDone: () => void }) {
         risultati.push({
           file: doc.nome,
           stato: 'ok',
-          messaggio: `${r.fattura.notaDiCredito ? 'Nota di credito' : 'Fattura'} ${r.fattura.numero} (${r.fattura.direzione === 'attiva' ? 'emessa' : 'ricevuta'}) di ${formatEuro(r.fattura.totaleCents)}${r.controparteCreata ? ` · nuova controparte: ${r.fattura.controparte.denominazione}` : ''}`,
+          messaggio: descriviImport(r),
           avvisi: r.avvisi,
+          documenti: r.fatture.length,
         });
       } catch (err) {
         const dettagli = err instanceof ApiError ? err.errori.map((e) => e.messaggio) : [];
@@ -65,7 +82,7 @@ function ImportXml({ onDone }: { onDone: () => void }) {
     onDone();
   }
 
-  const importate = esiti.filter((e) => e.stato === 'ok').length;
+  const importate = esiti.filter((e) => e.stato === 'ok').reduce((s, e) => s + (e.documenti ?? 1), 0);
   const gia = esiti.filter((e) => e.stato === 'gia').length;
   const errori = esiti.filter((e) => e.stato === 'ko').length;
 
@@ -84,7 +101,7 @@ function ImportXml({ onDone }: { onDone: () => void }) {
         </Button>
         <input ref={input} type="file" accept=".xml,.p7m,.zip,text/xml,application/zip" multiple hidden onChange={(e) => importa(e.target.files)} />
       </div>
-      {esiti.length > 1 && (
+      {(esiti.length > 1 || importate > 1) && (
         <p className="small import-summary">
           {importate} importate{gia > 0 ? `, ${gia} già presenti` : ''}{errori > 0 ? `, ${errori} con errori` : ''}
         </p>

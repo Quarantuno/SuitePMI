@@ -12,12 +12,17 @@ import {
   type ImportXmlResponse,
   type PagamentoInput,
 } from '@suite/shared';
-import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { pgErrorCode, UNIQUE_VIOLATION } from '../common/pg-errors';
 import { ContropartiService } from '../controparti/controparti.service';
 import { DbService, type Tx } from '../db/db.service';
 import { aziende, controparti, fatture, pagamenti, scadenze } from '../db/schema';
-import { FatturaPAError, parseFatturaPA, type SoggettoFattura } from './fatturapa.parser';
+import {
+  FatturaPAError,
+  parseFatturaPALotto,
+  type FatturaPAParsed,
+  type SoggettoFattura,
+} from './fatturapa.parser';
 
 const conScadenze = {
   controparte: { columns: { id: true, denominazione: true } },
@@ -127,9 +132,9 @@ export class FattureService {
    * se siamo il cedente è una fattura attiva (da incassare), altrimenti passiva.
    */
   async importXml(aziendaId: string, xml: string): Promise<ImportXmlResponse> {
-    let parsed;
+    let documenti: FatturaPAParsed[];
     try {
-      parsed = parseFatturaPA(xml);
+      documenti = parseFatturaPALotto(xml);
     } catch (err) {
       if (err instanceof FatturaPAError) throw new BadRequestException(err.message);
       throw err;
@@ -138,55 +143,131 @@ export class FattureService {
     const [azienda] = await this.dbs.db.select().from(aziende).where(eq(aziende.id, aziendaId));
     if (!azienda) throw new NotFoundException('Azienda non trovata');
 
-    const siamoCedente = parsed.cedente.partitaIva === azienda.partitaIva;
-    const siamoCessionario = parsed.cessionario.partitaIva === azienda.partitaIva;
+    // In un lotto l'header (cedente e cessionario) è unico per tutti i documenti.
+    const primo = documenti[0]!;
+    const siamoCedente = primo.cedente.partitaIva === azienda.partitaIva;
+    const siamoCessionario = primo.cessionario.partitaIva === azienda.partitaIva;
     if (!siamoCedente && !siamoCessionario) {
       throw new BadRequestException(
         `La fattura non riguarda la tua azienda (P.IVA ${azienda.partitaIva} non presente come cedente o cessionario)`,
       );
     }
     const direzione = siamoCedente ? 'attiva' : 'passiva';
-    const altro: SoggettoFattura = siamoCedente ? parsed.cessionario : parsed.cedente;
+    const altro: SoggettoFattura = siamoCedente ? primo.cessionario : primo.cedente;
 
     try {
       return await this.dbs.withTenant(aziendaId, async (tx) => {
         const { id: controparteId, creata } = await this.trovaOCreaControparte(tx, aziendaId, altro, {
           tipo: direzione === 'attiva' ? 'cliente' : 'fornitore',
-          pec: siamoCedente ? parsed.pecDestinatario : null,
+          pec: siamoCedente ? primo.pecDestinatario : null,
         });
-        const [f] = await tx
-          .insert(fatture)
-          .values({
-            aziendaId,
-            controparteId,
-            direzione,
-            numero: parsed.numero,
-            dataEmissione: parsed.data,
-            totaleCents: parsed.totaleCents,
-            origine: 'xml',
-            xmlOriginale: xml,
-            tipoDocumento: parsed.tipoDocumento,
-          })
-          .returning();
-        const avvisi = [...parsed.avvisi];
-        if (parsed.tipoDocumento === 'TD04') {
-          // Nota di credito: niente rate, riduce le rate aperte della fattura collegata
-          const collegata = await this.trovaCollegata(tx, controparteId, direzione, parsed.collegate);
-          if (collegata) {
-            avvisi.push(...(await this.applicaNota(tx, aziendaId, f!, collegata)));
-          } else if (parsed.collegate.length > 0) {
-            avvisi.push(
-              `Fattura ${parsed.collegate.map((c) => c.numero).join(', ')} non trovata: importala e poi abbina la nota di credito.`,
+        const lotto = documenti.length > 1;
+        const avvisi: string[] = [];
+        const importate: Fattura[] = [];
+        const duplicate: string[] = [];
+        // Prima le fatture, poi le note di credito: così una nota trova la fattura dello stesso lotto.
+        const ordinati = [...documenti].sort(
+          (x, y) => Number(x.tipoDocumento === 'TD04') - Number(y.tipoDocumento === 'TD04'),
+        );
+        for (const parsed of ordinati) {
+          const pref = lotto ? `${parsed.numero}: ` : '';
+          // Controllo esplicito: un errore di vincolo annullerebbe tutta la transazione del lotto.
+          const [esiste] = await tx
+            .select({ id: fatture.id })
+            .from(fatture)
+            .where(
+              and(
+                eq(fatture.controparteId, controparteId),
+                eq(fatture.direzione, direzione),
+                eq(fatture.numero, parsed.numero),
+                eq(fatture.dataEmissione, parsed.data),
+              ),
             );
+          if (esiste) {
+            duplicate.push(parsed.numero);
+            continue;
           }
-        } else {
-          await tx.insert(scadenze).values(parsed.scadenze.map((r) => ({ ...r, aziendaId, fatturaId: f!.id })));
+          const [f] = await tx
+            .insert(fatture)
+            .values({
+              aziendaId,
+              controparteId,
+              direzione,
+              numero: parsed.numero,
+              dataEmissione: parsed.data,
+              totaleCents: parsed.totaleCents,
+              origine: 'xml',
+              xmlOriginale: xml,
+              tipoDocumento: parsed.tipoDocumento,
+            })
+            .returning();
+          avvisi.push(...parsed.avvisi.map((a) => pref + a));
+          if (parsed.tipoDocumento === 'TD04') {
+            // Nota di credito: niente rate, riduce le rate aperte della fattura collegata
+            const collegata = await this.trovaCollegata(tx, controparteId, direzione, parsed.collegate);
+            if (collegata) {
+              avvisi.push(...(await this.applicaNota(tx, aziendaId, f!, collegata)).map((a) => pref + a));
+            } else if (parsed.collegate.length > 0) {
+              avvisi.push(
+                `${pref}Fattura ${parsed.collegate.map((c) => c.numero).join(', ')} non trovata: la nota verrà abbinata quando la importi.`,
+              );
+            }
+          } else {
+            await tx.insert(scadenze).values(parsed.scadenze.map((r) => ({ ...r, aziendaId, fatturaId: f!.id })));
+            avvisi.push(...(await this.abbinaNoteInAttesa(tx, aziendaId, f!)).map((a) => pref + a));
+          }
+          importate.push(await this.load(tx, f!.id));
         }
-        return { fattura: await this.load(tx, f!.id), controparteCreata: creata, avvisi };
+        if (importate.length === 0) throw new ConflictException(
+          lotto ? 'Tutti i documenti del lotto sono già stati registrati' : 'Questa fattura è già stata registrata',
+        );
+        if (duplicate.length > 0) avvisi.push(`Già registrate, saltate: ${duplicate.join(', ')}.`);
+        // Le note abbinate dopo il loro inserimento vanno ricaricate per mostrare la fattura collegata.
+        const fattureFinali: Fattura[] = [];
+        for (const f of importate) fattureFinali.push(await this.load(tx, f.id)); // una query alla volta sulla transazione
+        return { fattura: fattureFinali[0]!, fatture: fattureFinali, duplicate, controparteCreata: creata, avvisi };
       });
     } catch (err) {
       duplicata(err);
     }
+  }
+
+  /**
+   * Una nota di credito importata prima della sua fattura resta "da abbinare":
+   * quando arriva la fattura indicata nei suoi riferimenti, la abbiniamo in automatico.
+   */
+  private async abbinaNoteInAttesa(tx: Tx, aziendaId: string, fattura: typeof fatture.$inferSelect): Promise<string[]> {
+    const note = await tx
+      .select()
+      .from(fatture)
+      .where(
+        and(
+          eq(fatture.controparteId, fattura.controparteId),
+          eq(fatture.direzione, fattura.direzione),
+          eq(fatture.tipoDocumento, 'TD04'),
+          isNull(fatture.fatturaCollegataId),
+          isNotNull(fatture.xmlOriginale),
+        ),
+      );
+    const avvisi: string[] = [];
+    for (const nota of note) {
+      let rif: FatturaPAParsed['collegate'] = [];
+      try {
+        rif =
+          parseFatturaPALotto(nota.xmlOriginale!).find(
+            (d) => d.numero === nota.numero && d.data === nota.dataEmissione,
+          )?.collegate ?? [];
+      } catch {
+        continue; // XML salvato non più leggibile: resta da abbinare a mano
+      }
+      const corrisponde = rif.some(
+        (c) => c.numero === fattura.numero && (!c.data || c.data === fattura.dataEmissione),
+      );
+      if (!corrisponde) continue;
+      const esito = await this.applicaNota(tx, aziendaId, nota, fattura);
+      avvisi.push(`Nota di credito ${nota.numero} abbinata automaticamente.`, ...esito.slice(1));
+    }
+    return avvisi;
   }
 
   async remove(aziendaId: string, id: string): Promise<void> {

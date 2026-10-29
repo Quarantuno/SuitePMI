@@ -99,7 +99,12 @@ export interface CreditiScadutiResponse {
 }
 
 export interface ImportXmlResponse {
+  /** Il primo documento importato (comodo per i file con una sola fattura). */
   fattura: Fattura;
+  /** Tutti i documenti importati: più di uno per i lotti. */
+  fatture: Fattura[];
+  /** Numeri dei documenti del lotto già registrati e quindi saltati. */
+  duplicate: string[];
   controparteCreata: boolean;
   avvisi: string[];
 }
