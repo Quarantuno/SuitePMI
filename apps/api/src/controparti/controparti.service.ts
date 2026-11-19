@@ -96,7 +96,7 @@ export class ContropartiService {
       });
     } catch (err) {
       if (pgErrorCode(err) === FOREIGN_KEY_VIOLATION) {
-        throw new ConflictException('La controparte ha fatture collegate: eliminale prima');
+        throw new ConflictException('La controparte è usata da fatture, solleciti o commesse');
       }
       throw err;
     }

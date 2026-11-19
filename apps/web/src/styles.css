@@ -292,3 +292,5 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 .nota-credito select { max-width: 220px; }
 .warn-text { color: var(--warn); margin: 8px 0 0; }
 .inline-field.spaziato { margin: 8px 0 12px; }
+
+.kpi dd { margin-inline-start: 0; }
