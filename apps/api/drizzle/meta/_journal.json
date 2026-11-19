@@ -50,6 +50,20 @@
       "when": 1793265686508,
       "tag": "0006_solleciti_automatici",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795038063798,
+      "tag": "0007_commesse",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795074117438,
+      "tag": "0008_costi_commessa",
+      "breakpoints": true
     }
   ]
 }

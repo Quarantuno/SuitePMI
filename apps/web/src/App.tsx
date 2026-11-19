@@ -2,6 +2,7 @@ import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Cassa } from './pages/Cassa';
 import { Clienti } from './pages/Clienti';
+import { Commesse, CommessaDettaglio } from './pages/Commesse';
 import { Crediti } from './pages/Crediti';
 import { Fatture } from './pages/Fatture';
 import { Impostazioni } from './pages/Impostazioni';
@@ -31,6 +32,7 @@ function Layout() {
           </NavLink>
           <NavLink to="/solleciti">Solleciti</NavLink>
           <NavLink to="/cassa">Cassa</NavLink>
+          <NavLink to="/commesse">Commesse</NavLink>
           <NavLink to="/fatture">Fatture</NavLink>
           <NavLink to="/clienti">Clienti e fornitori</NavLink>
           <NavLink to="/impostazioni">Impostazioni</NavLink>
@@ -67,6 +69,8 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Crediti />} />
+        <Route path="commesse" element={<Commesse />} />
+        <Route path="commesse/:id" element={<CommessaDettaglio />} />
         <Route path="fatture" element={<Fatture />} />
         <Route path="cassa" element={<Cassa />} />
         <Route path="clienti" element={<Clienti />} />

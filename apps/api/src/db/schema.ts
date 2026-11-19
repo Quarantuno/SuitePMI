@@ -101,6 +101,33 @@ export const controparti = pgTable(
   ],
 );
 
+export const commesse = pgTable(
+  'commesse',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    clienteId: uuid('cliente_id').notNull().references(() => controparti.id, { onDelete: 'restrict' }),
+    nome: text('nome').notNull(),
+    budgetCents: cents('budget_cents').notNull(),
+  },
+  (t) => [index('commesse_azienda_idx').on(t.aziendaId)],
+);
+
+export const costiCommessa = pgTable(
+  'costi_commessa',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    commessaId: uuid('commessa_id').notNull().references(() => commesse.id, { onDelete: 'cascade' }),
+    tipo: text('tipo', { enum: ['lavoro', 'spesa'] }).notNull(),
+    data: date('data', { mode: 'string' }).notNull(),
+    descrizione: text('descrizione').notNull(),
+    minuti: integer('minuti').notNull().default(0),
+    costoCents: cents('costo_cents').notNull(),
+  },
+  (t) => [index('costi_commessa_azienda_commessa_idx').on(t.aziendaId, t.commessaId)],
+);
+
 export const fatture = pgTable(
   'fatture',
   {
@@ -109,6 +136,7 @@ export const fatture = pgTable(
     controparteId: uuid('controparte_id')
       .notNull()
       .references(() => controparti.id, { onDelete: 'restrict' }),
+    commessaId: uuid('commessa_id').references(() => commesse.id, { onDelete: 'set null' }),
     direzione: text('direzione', { enum: ['attiva', 'passiva'] }).notNull(),
     numero: text('numero').notNull(),
     dataEmissione: date('data_emissione', { mode: 'string' }).notNull(),
@@ -122,6 +150,7 @@ export const fatture = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    index('fatture_commessa_idx').on(t.commessaId),
     index('fatture_azienda_idx').on(t.aziendaId),
     uniqueIndex('fatture_numero_uq').on(t.aziendaId, t.direzione, t.controparteId, t.numero, t.dataEmissione),
   ],

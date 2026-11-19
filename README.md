@@ -176,6 +176,20 @@ e lo proietta settimana per settimana usando le rate aperte di fatture emesse
   "Conta i crediti già scaduti come incassati subito";
 - evidenzia il saldo minimo previsto e la prima settimana in cui si va sotto zero.
 
+## Commesse
+
+Dalla voce **Commesse**, crea una commessa scegliendo un cliente esistente e
+inserendo il budget lordo in euro. Nel dettaglio puoi collegare o scollegare le
+fatture attive di quel cliente. Ogni fattura può appartenere a una sola commessa.
+
+Il riepilogo mostra budget, totale lordo delle fatture collegate, incassi
+registrati e residuo delle rate. Gli storni applicati tramite note di credito
+riducono il residuo e sono indicati separatamente dagli incassi.
+
+Nel dettaglio della commessa, **Ore e spese** registra data, descrizione e
+costo totale della voce. Per il lavoro si inserisce anche la durata in minuti.
+Il riepilogo mostra il tempo registrato e i costi di lavoro e spesa.
+
 ## Sicurezza
 
 - Isolamento dei dati tra aziende con Row-Level Security (vedi sopra).
