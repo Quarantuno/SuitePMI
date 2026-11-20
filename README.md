@@ -1,25 +1,24 @@
-# Suite PMI
+# SuitePMI
 
-Piattaforma all-in-one per le PMI italiane. Contiene il **nucleo**
-(account, aziende, isolamento dei dati, anagrafiche), il **modulo Incassi**
-(import delle fatture elettroniche FatturaPA, scadenze, incassi e calcolo degli
-interessi di mora secondo il d.lgs. 231/2002), il **modulo Solleciti**
-(promemoria, sollecito formale e diffida, con PDF e invio via email o PEC) e la
-**Cassa** (previsione settimanale e scadenzario di incassi e pagamenti).
+**Il gestionale per PMI italiane che collega fatture, incassi, cassa e commesse.**
 
-## Stack
+Importa le fatture elettroniche, segui i crediti dei clienti e controlla
+budget, ore e spese per ogni commessa.
 
-| Parte | Tecnologia |
+[Avvio rapido](#avvio-rapido) · [Guida ai moduli](#guida-ai-moduli) · [Sviluppo](#sviluppo) · [API](#api)
+
+## Cosa puoi fare
+
+| Modulo | Funzioni |
 | --- | --- |
-| Monorepo | pnpm workspaces |
-| API | NestJS 11 (monolite modulare), Drizzle ORM, PostgreSQL 16 |
-| Web | React 19, Vite 7, TanStack Query, React Router |
-| Condiviso | `@suite/shared`: schemi Zod, tipi delle API, calcolo interessi |
-| Test | Vitest (unitari + end-to-end su Postgres reale) |
+| **Fatture e incassi** | Import FatturaPA in XML, P7M e ZIP, scadenze, rate, incassi e note di credito. |
+| **Solleciti** | Promemoria, solleciti e diffide con PDF, storico e invio via email o PEC. |
+| **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
+| **Commesse** | Budget, stato, scadenza, fatture collegate e registrazione di ore e spese. |
 
-## Avvio in locale
+## Avvio rapido
 
-Prerequisiti: **Node 22+**, **Docker Desktop** e **pnpm** (`corepack enable` lo attiva).
+**Prerequisiti** — Node.js 22+, pnpm 10.28.0 e Docker con Compose.
 
 ```bash
 pnpm install
@@ -29,11 +28,26 @@ pnpm db:migrate     # crea tabelle e policy di sicurezza
 pnpm dev            # API su :3000, web su http://localhost:5173
 ```
 
-Apri http://localhost:5173, registra la tua azienda e importa le fatture da **Fatture**:
-file XML, firmati `.p7m` (DER, BER o base64) oppure interi archivi `.zip` come quelli
-scaricati dal cassetto fiscale (i file di metadati `_MT_` vengono ignorati).
+Apri [SuitePMI in locale](http://localhost:5173), registra la tua azienda e vai
+su **Fatture → Importa fatture elettroniche**. Per provare con dati di esempio,
+registrati con la partita IVA `12345678903` e importa la
+[fattura XML di prova](apps/api/test/fixtures/fattura-attiva.xml).
 
-Sono supportati anche:
+| Servizio | Indirizzo locale |
+| --- | --- |
+| Applicazione web | [localhost:5173](http://localhost:5173) |
+| API, endpoint di verifica | [localhost:3000/api/health](http://localhost:3000/api/health) |
+| Mailpit, posta di prova | [localhost:8025](http://localhost:8025) |
+
+## Guida ai moduli
+
+### Fatture e incassi
+
+Puoi importare file XML, file firmati `.p7m` (DER, BER o base64) o archivi
+`.zip` come quelli scaricati dal cassetto fiscale. L’import ignora i file di
+metadati `_MT_`.
+
+L’import gestisce questi tipi di documento.
 
 - **fatture in lotto**: un file con più `FatturaElettronicaBody` importa tutti i documenti;
   quelli già registrati vengono saltati (ed elencati) senza bloccare gli altri;
@@ -51,63 +65,10 @@ indicata in `DatiFattureCollegate` ne riducono le rate aperte partendo dall'ulti
 altrimenti restano "da abbinare": vengono collegate in automatico quando importi la
 fattura indicata, oppure le colleghi a mano dalla lista. Sulla parte
 stornata non si calcolano interessi di mora, e un'eventuale eccedenza viene segnalata.
-Un file di prova e in `apps/api/test/fixtures/fattura-attiva.xml`: funziona se ti
-registri con la partita IVA `12345678903`.
 
-Test (richiedono Postgres avviato; usano un database separato `suite_test`):
+### Interessi di mora
 
-```bash
-pnpm test
-```
-
-## Struttura
-
-```
-apps/
-  api/                 NestJS
-    drizzle/           migrazioni SQL (0001_rls.sql = policy di isolamento)
-    src/
-      db/              schema Drizzle, connessione, withTenant()
-      common/          guard JWT, validazione Zod, errori Postgres
-      auth/            registrazione, login, /me
-      controparti/     clienti e fornitori
-      fatture/         fatture, rate, pagamenti, parser FatturaPA, estrazione .p7m
-      incassi/         crediti scaduti con interessi e indennizzi
-      azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
-      solleciti/       bozze, PDF della lettera, invio email/PEC, storico
-      cassa/           previsione di cassa a settimane e scadenzario
-    test/              test end-to-end + fattura XML di esempio
-  web/                 React
-    src/pages/         Crediti, Solleciti, Cassa, Fatture, Clienti, Impostazioni, Accesso
-    src/GraficoCassa.tsx  grafico SVG fatto a mano (entrate, uscite, saldo)
-packages/
-  shared/              logica e tipi condivisi (usati da API e web)
-```
-
-## Scelte architetturali
-
-**Multi-tenant con Row-Level Security.** Ogni tabella di business ha `azienda_id`.
-L'API si collega a Postgres con il ruolo `suite_app`, che non possiede le tabelle:
-per questo le policy RLS valgono sempre. Ogni richiesta gira dentro
-`DbService.withTenant(aziendaId, tx => ...)`, che imposta `app.azienda_id` per la
-transazione. Anche un bug nel codice (una `where` dimenticata) non espone i dati
-di un'altra azienda: il test e2e lo verifica.
-
-Le migrazioni girano invece con l'utente `postgres` (`DATABASE_ADMIN_URL`).
-
-**Monolite modulare.** Un modulo = una cartella in `apps/api/src` con controller,
-service e le sue tabelle. I moduli dipendono dal nucleo (`db`, `common`, `auth`)
-e da `@suite/shared`, non tra loro (eccezione: `fatture` usa `controparti`).
-
-**Importi in centesimi interi** (`bigint` in Postgres, `number` in TypeScript).
-Mai float per i soldi.
-
-**Validazione condivisa.** Gli schemi Zod in `packages/shared/src/schemas.ts` validano
-le richieste nell'API e descrivono i form nel frontend.
-
-## Interessi di mora
-
-Il calcolo e in `packages/shared/src/interessi-mora.ts`, coperto da test:
+I test coprono il [calcolo degli interessi](packages/shared/src/interessi-mora.ts).
 
 - decorrono dal giorno dopo la scadenza, senza messa in mora;
 - tasso = riferimento BCE del semestre + 8 punti, applicato giorno per giorno;
@@ -120,7 +81,7 @@ Il calcolo e in `packages/shared/src/interessi-mora.ts`, coperto da test:
 `packages/shared/src/tassi-mora.ts` (il MEF lo pubblica a gennaio e luglio).
 Se manca, l'API risponde con un errore esplicito invece di calcolare male.
 
-## Solleciti
+### Solleciti
 
 Dalla pagina **Crediti scaduti** clicchi **Sollecita** accanto a un cliente:
 
@@ -139,7 +100,7 @@ Dalla pagina **Crediti scaduti** clicchi **Sollecita** accanto a un cliente:
 Compila prima **Impostazioni** (indirizzo, email, PEC, IBAN): compaiono
 nell'intestazione e nelle coordinate di pagamento.
 
-### Solleciti automatici
+#### Solleciti automatici
 
 Da **Impostazioni → Solleciti automatici** l'azienda li attiva (spenti di default) e sceglie
 dopo quanti giorni di ritardo parte il primo contatto e fino a che livello può arrivare
@@ -164,7 +125,7 @@ l'SMTP del gestore PEC (senza `PEC_SMTP_HOST` l'invio PEC è disattivato). Nota:
 una PEC ha valore legale solo se parte da una casella PEC vera; per ora la
 casella è unica per tutta l'installazione (vedi prossimi passi).
 
-## Cassa
+### Cassa
 
 La pagina **Cassa** parte dal saldo di cassa e banca che inserisci tu (con la data)
 e lo proietta settimana per settimana usando le rate aperte di fatture emesse
@@ -176,7 +137,7 @@ e lo proietta settimana per settimana usando le rate aperte di fatture emesse
   "Conta i crediti già scaduti come incassati subito";
 - evidenzia il saldo minimo previsto e la prima settimana in cui si va sotto zero.
 
-## Commesse
+### Commesse
 
 Dalla voce **Commesse**, crea una commessa scegliendo un cliente esistente e
 inserendo il budget lordo in euro. Nel dettaglio puoi collegare o scollegare le
@@ -194,7 +155,79 @@ Nel dettaglio della commessa, **Ore e spese** registra data, descrizione e
 costo totale della voce. Per il lavoro si inserisce anche la durata in minuti.
 Il riepilogo mostra il tempo registrato e i costi di lavoro e spesa.
 
-## Sicurezza
+## Sviluppo
+
+`main` è il branch stabile. Gli aggiornamenti in lavorazione arrivano su
+[`dev-unstable`](https://github.com/Quarantuno/SuitePMI/tree/dev-unstable).
+
+### Build e test
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm test
+```
+
+I test end-to-end richiedono PostgreSQL avviato con `pnpm db:up` e usano
+il database separato `suite_test`. La build genera i tipi condivisi usati
+dall’API e dal frontend.
+
+### Stack
+
+| Parte | Tecnologia |
+| --- | --- |
+| Monorepo | pnpm workspaces |
+| API | NestJS 11 (monolite modulare), Drizzle ORM, PostgreSQL 16 |
+| Web | React 19, Vite 7, TanStack Query, React Router |
+| Condiviso | `@suite/shared`: schemi Zod, tipi delle API, calcolo interessi |
+| Test | Vitest (unitari + end-to-end su Postgres reale) |
+
+### Struttura
+
+```
+apps/
+  api/                 NestJS
+    drizzle/           migrazioni SQL (0001_rls.sql = policy di isolamento)
+    src/
+      db/              schema Drizzle, connessione, withTenant()
+      common/          guard JWT, validazione Zod, errori Postgres
+      auth/            registrazione, login, /me
+      controparti/     clienti e fornitori
+      fatture/         fatture, rate, pagamenti, parser FatturaPA, estrazione .p7m
+      incassi/         crediti scaduti con interessi e indennizzi
+      azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
+      solleciti/       bozze, PDF della lettera, invio email/PEC, storico
+      cassa/           previsione di cassa a settimane e scadenzario
+      commesse/        commesse, fatture collegate, ore e spese
+    test/              test end-to-end + fattura XML di esempio
+  web/                 React
+    src/pages/         Crediti, Solleciti, Cassa, Fatture, Clienti, Impostazioni, Accesso
+    src/GraficoCassa.tsx  grafico SVG fatto a mano (entrate, uscite, saldo)
+packages/
+  shared/              logica e tipi condivisi (usati da API e web)
+```
+
+### Architettura
+
+**Multi-tenant con Row-Level Security.** Ogni tabella di business ha `azienda_id`.
+L'API si collega a Postgres con il ruolo `suite_app`, che non possiede le tabelle:
+per questo le policy RLS valgono sempre. Ogni richiesta gira dentro
+`DbService.withTenant(aziendaId, tx => ...)`, che imposta `app.azienda_id` per la
+transazione. Anche un bug nel codice (una `where` dimenticata) non espone i dati
+di un'altra azienda: il test e2e lo verifica.
+
+Le migrazioni girano invece con l'utente `postgres` (`DATABASE_ADMIN_URL`).
+
+**Monolite modulare.** Ogni modulo vive in una cartella di `apps/api/src`, con controller e service.
+I moduli condividono il nucleo (`db`, `common`, `auth`) e `@suite/shared`.
+
+**Importi in centesimi interi** (`bigint` in Postgres, `number` in TypeScript).
+Mai float per i soldi.
+
+**Validazione condivisa.** Gli schemi Zod in `packages/shared/src/schemas.ts` validano
+le richieste nell'API e descrivono i form nel frontend.
+
+### Sicurezza
 
 - Isolamento dei dati tra aziende con Row-Level Security (vedi sopra).
 - Password con Argon2, tempi di risposta del login uniformi anche per email inesistenti.
@@ -209,10 +242,11 @@ Il riepilogo mostra il tempo registrato e i costi di lavoro e spesa.
 
 ## API
 
-Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e login.
+Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Authorization: Bearer <token>`.
 
 | Metodo | Percorso | Cosa fa |
 | --- | --- | --- |
+| GET | `/health` | Verifica che l’API risponda. Endpoint pubblico. |
 | POST | `/auth/register` | Crea utente + azienda, restituisce il token |
 | POST | `/auth/login` | Login |
 | GET | `/auth/me` | Utente e azienda correnti |
@@ -233,6 +267,12 @@ Tutte sotto `/api`, con `Authorization: Bearer <token>` tranne registrazione e l
 | GET | `/solleciti/automatici/piano` | Cosa partirebbe oggi con i solleciti automatici, e perché |
 | POST | `/solleciti/automatici/esegui` | Esegue subito il giro di oggi |
 | GET | `/cassa/previsione?settimane=13&includiCreditiScaduti=false` | Previsione di cassa e scadenzario |
+| GET/POST | `/commesse` | Elenco e creazione delle commesse |
+| PATCH | `/commesse/:id` | Modifica nome, budget, stato e scadenza |
+| GET | `/commesse/:id/fatture` | Fatture collegate e disponibili |
+| PATCH | `/commesse/:id/fatture/:fatturaId` | Collega o scollega la fattura |
+| GET/POST | `/commesse/:id/costi` | Elenco e registrazione di ore e spese |
+| DELETE | `/commesse/:id/costi/:costoId` | Elimina una voce di costo |
 
 ## Prossimi passi tecnici
 
