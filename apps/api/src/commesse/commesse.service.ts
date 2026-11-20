@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Commessa, CommessaInput, CostoCommessa, CostoCommessaInput, FatturaCommessa } from '@suite/shared';
+import type { AggiornaCommessaInput, Commessa, CommessaInput, CostoCommessa, CostoCommessaInput, FatturaCommessa } from '@suite/shared';
 import { and, asc, desc, eq, isNull, ne, notInArray, or } from 'drizzle-orm';
 import { DbService } from '../db/db.service';
 import { commesse, controparti, costiCommessa, fatture } from '../db/schema';
@@ -35,6 +35,14 @@ export class CommesseService {
 
       const [commessa] = await tx.insert(commesse).values({ aziendaId, ...input }).returning();
       return { id: commessa!.id, nome: input.nome, budgetCents: input.budgetCents, cliente };
+    });
+  }
+
+  aggiorna(aziendaId: string, id: string, input: AggiornaCommessaInput): Promise<void> {
+    return this.db.withTenant(aziendaId, async (tx) => {
+      const [aggiornata] = await tx.update(commesse).set(input)
+        .where(eq(commesse.id, id)).returning({ id: commesse.id });
+      if (!aggiornata) throw new NotFoundException('Commessa non trovata');
     });
   }
 

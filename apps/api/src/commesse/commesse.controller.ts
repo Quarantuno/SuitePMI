@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
+  aggiornaCommessaSchema,
   collegamentoCommessaSchema,
   commessaSchema,
   costoCommessaSchema,
+  type AggiornaCommessaInput,
   type CollegamentoCommessaInput,
   type CommessaInput,
   type CostoCommessaInput,
@@ -23,6 +25,16 @@ export class CommesseController {
   @Post()
   create(@CurrentUser() user: SessionUser, @Body(new ZodPipe(commessaSchema)) input: CommessaInput) {
     return this.service.create(user.aziendaId, input);
+  }
+
+  @Patch(':id')
+  @HttpCode(204)
+  aggiorna(
+    @CurrentUser() user: SessionUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(aggiornaCommessaSchema)) input: AggiornaCommessaInput,
+  ) {
+    return this.service.aggiorna(user.aziendaId, id, input);
   }
 
   @Get(':id/fatture')

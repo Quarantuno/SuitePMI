@@ -7,6 +7,9 @@ export const commessaSchema = z.object({
   budgetCents: z.number().int().min(0).max(100_000_000_000),
 });
 
+export const aggiornaCommessaSchema = commessaSchema.omit({ clienteId: true });
+export type AggiornaCommessaInput = z.infer<typeof aggiornaCommessaSchema>;
+
 export const collegamentoCommessaSchema = z.object({ collegata: z.boolean() });
 
 export type CommessaInput = z.infer<typeof commessaSchema>;
