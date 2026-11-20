@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatData, parseEuroToCents, type Commessa, type CommessaInput, type Controparte, type FatturaCommessa } from '@suite/shared';
-import type { FormEvent } from 'react';
+import { formatData, parseEuroToCents, type AggiornaCommessaInput, type Commessa, type CommessaInput, type Controparte, type FatturaCommessa } from '@suite/shared';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { CostiCommessa } from './CostiCommessa';
@@ -112,6 +112,7 @@ export function CommessaDettaglio() {
   return (
     <>
       <PageHeader title={commessa.nome} subtitle={commessa.cliente.denominazione} actions={<Link to="/commesse">Tutte le commesse</Link>} />
+      <ModificaCommessa key={commessa.id} commessa={commessa} />
       <ErrorBox error={documenti.error ?? collega.error} />
       {documenti.isPending && <p>Caricamento fatture…</p>}
       {documenti.data && (
@@ -159,5 +160,49 @@ export function CommessaDettaglio() {
       )}
       <CostiCommessa key={commessa.id} commessaId={commessa.id} />
     </>
+  );
+}
+
+
+function ModificaCommessa({ commessa }: { commessa: Commessa }) {
+  const [aperto, setAperto] = useState(false);
+  const cache = useQueryClient();
+  const salva = useMutation({
+    mutationFn: (form: FormData) => {
+      const body: AggiornaCommessaInput = {
+        nome: String(form.get('nome') ?? ''),
+        budgetCents: parseEuroToCents(String(form.get('budget') ?? '')),
+      };
+      return api<void>('/commesse/' + commessa.id, { method: 'PATCH', body });
+    },
+    onSuccess: async () => {
+      await cache.invalidateQueries({ queryKey: ['commesse'], exact: true });
+      setAperto(false);
+    },
+  });
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    salva.mutate(new FormData(event.currentTarget));
+  }
+
+  if (!aperto) {
+    return <Button variant="secondary" onClick={() => setAperto(true)}>Modifica commessa</Button>;
+  }
+
+  return (
+    <section className="card">
+      <h2>Modifica commessa</h2>
+      <ErrorBox error={salva.error} />
+      <form className="inline-form" onSubmit={submit}>
+        <Field label="Nome" name="nome" defaultValue={commessa.nome} required maxLength={160} />
+        <Field label="Budget lordo (€)" name="budget" defaultValue={(commessa.budgetCents / 100).toFixed(2).replace('.', ',')} inputMode="decimal" required />
+        <Button disabled={salva.isPending}>Salva</Button>
+        <Button variant="ghost" type="button" disabled={salva.isPending} onClick={() => {
+          salva.reset();
+          setAperto(false);
+        }}>Annulla</Button>
+      </form>
+    </section>
   );
 }
