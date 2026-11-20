@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Documentazione di SuitePMI. Installa l’app in locale e scopri come gestire fatture, incassi, cassa e commesse.">
+  <title>Documentazione · SuitePMI</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#contenuto">Salta al contenuto</a>
+  <header class="barra">
+    <a class="marchio" href="./">SuitePMI <span>Documentazione</span></a>
+    <a href="https://github.com/Quarantuno/SuitePMI">Repository GitHub</a>
+  </header>
+
+  <div class="pagina">
+    <nav aria-label="Indice della documentazione">
+      <a href="#avvio">Avvio rapido</a>
+      <a href="#fatture">Fatture e incassi</a>
+      <a href="#solleciti">Solleciti</a>
+      <a href="#cassa">Cassa</a>
+      <a href="#commesse">Commesse</a>
+      <a href="#sviluppo">Sviluppo e API</a>
+    </nav>
+
+    <main id="contenuto">
+      <header class="introduzione">
+        <h1>Documentazione SuitePMI</h1>
+        <p>Installa SuitePMI in locale e segui il lavoro dalla fattura all’incasso, con budget, ore e spese per ogni commessa.</p>
+        <a class="azione" href="#avvio">Inizia dall’avvio rapido</a>
+      </header>
+
+      <section id="avvio">
+        <h2>Avvio rapido</h2>
+        <p>Servono Node.js 22 o successivo, pnpm 10.28.0 e Docker con Compose. Clona il repository ed esegui i comandi dalla sua radice.</p>
+        <pre><code>git clone https://github.com/Quarantuno/SuitePMI.git
+cd SuitePMI
+pnpm install
+cp .env.example .env
+pnpm db:up
+pnpm db:migrate
+pnpm dev</code></pre>
+        <p>Apri <a href="http://localhost:5173">l’applicazione locale</a> e registra l’azienda. Per provare l’import con dati di esempio, usa la partita IVA <code>12345678903</code> e carica la <a href="https://github.com/Quarantuno/SuitePMI/blob/main/apps/api/test/fixtures/fattura-attiva.xml">fattura XML di prova</a>.</p>
+      </section>
+
+      <section id="fatture">
+        <h2>Fatture e incassi</h2>
+        <p>In <strong>Fatture</strong> puoi importare documenti FatturaPA in XML, P7M o ZIP. SuitePMI ricava le rate e le relative scadenze. Apri la fattura per registrare un pagamento, anche parziale.</p>
+        <p>Le note di credito collegate riducono il residuo. La schermata <strong>Crediti scaduti</strong> mostra le rate da seguire e il calcolo degli interessi di mora.</p>
+      </section>
+
+      <section id="solleciti">
+        <h2>Solleciti</h2>
+        <p>In <strong>Crediti scaduti</strong> scegli <strong>Sollecita</strong> accanto al cliente, rivedi il testo proposto e salva la bozza. Da lì puoi scaricare il PDF, inviarlo via email o PEC se configurata, o registrare un invio eseguito fuori dall’app.</p>
+        <p>Durante lo sviluppo, i messaggi finiscono in <a href="http://localhost:8025">Mailpit</a>. Per la configurazione di SMTP, PEC e invii automatici, consulta il <a href="https://github.com/Quarantuno/SuitePMI#solleciti">README del branch stabile</a>.</p>
+      </section>
+
+      <section id="cassa">
+        <h2>Cassa</h2>
+        <p>Inserisci il saldo di cassa e banca e seleziona l’orizzonte della previsione. La vista settimanale usa le rate aperte delle fatture emesse e ricevute. Puoi includere i crediti scaduti come incassi attesi nella prima settimana.</p>
+      </section>
+
+      <section id="commesse">
+        <h2>Commesse</h2>
+        <p>Crea una commessa per un cliente e indica il budget lordo. Dal dettaglio colleghi le fatture attive del cliente e vedi fatturato, incassi e residuo. In <strong>Ore e spese</strong> registri il tempo lavorato e i costi.</p>
+        <p>Su <a href="https://github.com/Quarantuno/SuitePMI/tree/dev-unstable">dev-unstable</a> puoi anche modificare nome e budget, impostare una scadenza e filtrare le commesse per stato o ritardo.</p>
+      </section>
+
+      <section id="sviluppo">
+        <h2>Sviluppo e API</h2>
+        <p>Il monorepo contiene il frontend React, l’API NestJS e gli schemi TypeScript condivisi. Con PostgreSQL avviato, puoi eseguire build, controllo dei tipi e test dalla radice.</p>
+        <pre><code>pnpm build
+pnpm typecheck
+pnpm test</code></pre>
+        <p>I test di integrazione usano il database separato <code>suite_test</code>. Trovi le rotte nel <a href="https://github.com/Quarantuno/SuitePMI#api">riferimento API</a>.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
