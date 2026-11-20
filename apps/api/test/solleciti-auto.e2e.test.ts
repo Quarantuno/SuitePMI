@@ -91,7 +91,7 @@ describe('solleciti automatici', () => {
     expect(decisione(p, 'Appena scaduto')).toMatchObject({ azione: 'salta', motivo: expect.stringMatching(/dopo 7/) });
   });
 
-  it('esegue il giro: invia, segna come automatici e scarta le bozze non inviate', async () => {
+  it('esegue il giro, conserva gli esiti incerti ed evita nuovi tentativi automatici', async () => {
     const res = await http.post('/api/solleciti/automatici/esegui').set(auth()).expect(200);
     const esito: EsitoSollecitiAuto = res.body;
     expect(esito.inviati.map((s) => [s.controparte.denominazione, s.livello, s.automatico])).toEqual([
@@ -103,7 +103,9 @@ describe('solleciti automatici', () => {
     expect(mailer.inviati[0]!.text).toContain('Lorenzo Rossi');
 
     const tutti: Sollecito[] = (await http.get('/api/solleciti').set(auth()).expect(200)).body;
-    expect(tutti).toHaveLength(2); // la bozza per "Rotto" è stata tolta
+    expect(tutti.filter((s) => s.stato === 'inviato')).toHaveLength(2);
+    expect(tutti.find((s) => s.controparte.id === ids['Rotto'])).toMatchObject({ stato: 'esito_incerto' });
+    expect(decisione(await piano(), 'Rotto')).toMatchObject({ azione: 'salta', motivo: expect.stringMatching(/verificare/) });
     expect((await http.get('/api/azienda').set(auth()).expect(200)).body.sollecitiAutoUltimaEsecuzione).toBe(oggi);
   });
 
@@ -124,6 +126,20 @@ describe('solleciti automatici', () => {
     // Domani alle 10: prende l'azienda una volta sola (e non invia: le attese non sono passate)
     expect(await scheduler.tick(new Date(`${domani}T08:00:00Z`))).toBe(1);
     expect(await scheduler.tick(new Date(`${domani}T09:00:00Z`))).toBe(0);
+    expect(mailer.inviati).toHaveLength(2);
+  });
+
+  it('riapre un esito incerto dopo che l’utente ha verificato la mancata consegna', async () => {
+    const tutti: Sollecito[] = (await http.get('/api/solleciti').set(auth()).expect(200)).body;
+    const incerto = tutti.find((s) => s.controparte.id === ids['Rotto'])!;
+    const endpoint = '/api/solleciti/' + incerto.id;
+    await http.post(endpoint + '/invia').set(auth()).send({ canale: 'email' }).expect(409);
+    expect((await http.post(endpoint + '/riapri').set(auth()).expect(200)).body).toMatchObject({
+      stato: 'bozza',
+      canale: null,
+      destinatario: null,
+    });
+    await http.post(endpoint + '/riapri').set(auth()).expect(409);
     expect(mailer.inviati).toHaveLength(2);
   });
 });

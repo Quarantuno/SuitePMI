@@ -56,6 +56,8 @@ export function Solleciti() {
                   <td>
                     {s.stato === 'bozza' ? (
                       <span className="badge">Bozza</span>
+                    ) : s.stato !== 'inviato' ? (
+                      <span className="badge">Invio da verificare</span>
                     ) : (
                       <span className="badge badge-ok">Inviato · {canale[s.canale!]}</span>
                     )}

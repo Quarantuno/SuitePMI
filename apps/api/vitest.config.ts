@@ -11,7 +11,7 @@ export default defineConfig({
         process.env.TEST_DATABASE_URL ?? 'postgres://suite_app:suite_app_dev@localhost:5432/suite_test',
       DATABASE_ADMIN_URL:
         process.env.TEST_DATABASE_ADMIN_URL ?? 'postgres://postgres:postgres@localhost:5432/suite_test',
-      JWT_SECRET: 'segreto-dei-test',
+      JWT_SECRET: 'chiave-esclusivamente-per-i-test-locali',
     },
     fileParallelism: false,
     testTimeout: 20_000,

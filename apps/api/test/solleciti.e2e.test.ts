@@ -141,7 +141,11 @@ describe('solleciti', () => {
   });
 
   it("invia via email con il PDF allegato e non permette un secondo invio", async () => {
-    const res = await http.post(`/api/solleciti/${promemoria.id}/invia`).set(auth(s)).send({ canale: 'email' }).expect(200);
+    const invia = () => http.post(`/api/solleciti/${promemoria.id}/invia`).set(auth(s)).send({ canale: 'email' });
+    const risposte = await Promise.all([invia(), invia()]);
+    expect(risposte.map((risposta) => risposta.status).sort()).toEqual([200, 409]);
+    const res = risposte.find((risposta) => risposta.status === 200)!;
+    expect(mailer.inviati.filter((m) => m.subject === promemoria.oggetto)).toHaveLength(1);
     expect(res.body).toMatchObject({ stato: 'inviato', canale: 'email', destinatario: 'amm@cliente.it' });
 
     expect(mailer.inviati).toHaveLength(1);

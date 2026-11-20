@@ -28,7 +28,7 @@ export class IncassiService {
   ): Promise<CreditiScadutiResponse> {
     return this.dbs.withTenant(aziendaId, async (tx) => {
       const rows = await tx
-        .select({ scadenza: scadenze, fattura: fatture, controparte: controparti })
+        .select({ scadenza: scadenze, fattura: { id: fatture.id, numero: fatture.numero, dataEmissione: fatture.dataEmissione }, controparte: controparti })
         .from(scadenze)
         .innerJoin(fatture, eq(fatture.id, scadenze.fatturaId))
         .innerJoin(controparti, eq(controparti.id, fatture.controparteId))
@@ -77,7 +77,7 @@ export class IncassiService {
           controparte: {
             id: controparte.id,
             denominazione: controparte.denominazione,
-            pec: controparte.pec,
+            pec: controparte.pecConfermata ? controparte.pec : null,
             email: controparte.email,
           },
           dataScadenza: scadenza.dataScadenza,

@@ -67,6 +67,12 @@ export class SollecitiController {
     return this.service.invia(user, id, body);
   }
 
+  @Post(':id/riapri')
+  @HttpCode(200)
+  riapri(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.riapri(user, id);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   remove(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {

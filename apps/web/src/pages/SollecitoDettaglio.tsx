@@ -13,7 +13,8 @@ const ETICHETTA_CANALE: Record<CanaleSollecito, string> = {
 
 function Invio({ s, controparte }: { s: Sollecito; controparte: Controparte | undefined }) {
   const qc = useQueryClient();
-  const [canale, setCanale] = useState<CanaleSollecito>(s.livello === 'diffida' ? 'pec' : 'email');
+  const inVerifica = s.stato !== 'bozza';
+  const [canale, setCanale] = useState<CanaleSollecito>(inVerifica ? 'manuale' : s.livello === 'diffida' ? 'pec' : 'email');
   const [destinatario, setDestinatario] = useState('');
   const [inviatoIl, setInviatoIl] = useState(todayIso());
 
@@ -30,6 +31,7 @@ function Invio({ s, controparte }: { s: Sollecito; controparte: Controparte | un
             ? { canale, inviatoIl }
             : { canale, ...(destinatario ? { destinatario } : {}) },
       }),
+    onError: () => { void qc.invalidateQueries({ queryKey: ['sollecito', s.id] }); },
     onSuccess: (nuovo) => {
       qc.setQueryData(['sollecito', s.id], nuovo);
       void qc.invalidateQueries({ queryKey: ['solleciti'] });
@@ -37,16 +39,26 @@ function Invio({ s, controparte }: { s: Sollecito; controparte: Controparte | un
     },
   });
 
+  const riapri = useMutation({
+    mutationFn: () => api<Sollecito>('/solleciti/' + s.id + '/riapri', { method: 'POST' }),
+    onSuccess: (nuovo) => {
+      qc.setQueryData(['sollecito', s.id], nuovo);
+      void qc.invalidateQueries({ queryKey: ['solleciti'] });
+      void qc.invalidateQueries({ queryKey: ['solleciti-piano'] });
+    },
+  });
+
   return (
     <section className="card">
-      <h2>Invia</h2>
-      <div className="segmented" role="radiogroup" aria-label="Canale di invio">
+      <h2>{inVerifica ? 'Conferma invio' : 'Invia'}</h2>
+      {inVerifica && <p>Verifica l’invio presso il gestore di posta prima di registrarlo.</p>}
+      {!inVerifica && <div className="segmented" role="radiogroup" aria-label="Canale di invio">
         {(['email', 'pec', 'manuale'] as const).map((c) => (
           <button key={c} role="radio" aria-checked={canale === c} className={canale === c ? 'active' : ''} onClick={() => setCanale(c)}>
             {c === 'manuale' ? "L'ho già inviato io" : ETICHETTA_CANALE[c]}
           </button>
         ))}
-      </div>
+      </div>}
       {canale === 'manuale' ? (
         <div className="send-row">
           <label className="field">
@@ -64,11 +76,17 @@ function Invio({ s, controparte }: { s: Sollecito; controparte: Controparte | un
           <p className="muted small">La lettera parte con il PDF allegato.</p>
         </div>
       )}
-      <ErrorBox error={invia.error} />
+      <ErrorBox error={invia.error ?? riapri.error} />
       <div className="form-actions">
-        <Button onClick={() => invia.mutate()} disabled={invia.isPending}>
+        <Button onClick={() => invia.mutate()} disabled={invia.isPending || riapri.isPending}>
           {canale === 'manuale' ? 'Segna come inviato' : `Invia via ${ETICHETTA_CANALE[canale]}`}
         </Button>
+        {s.stato === 'esito_incerto' && (
+          <Button variant="secondary" disabled={invia.isPending || riapri.isPending}
+            onClick={() => window.confirm('Hai verificato con il gestore che il messaggio non è stato consegnato?') && riapri.mutate()}>
+            Riapri bozza
+          </Button>
+        )}
       </div>
     </section>
   );
@@ -115,6 +133,8 @@ export function SollecitoDettaglio() {
                   <span className="muted small">Stato</span>
                   {s.stato === 'bozza' ? (
                     <span className="badge">Bozza</span>
+                  ) : s.stato !== 'inviato' ? (
+                    <span className="badge">Invio da verificare</span>
                   ) : (
                     <span className="badge badge-ok">
                       Inviato il {formatData(s.inviatoIl!)} · {ETICHETTA_CANALE[s.canale!]}
@@ -141,7 +161,7 @@ export function SollecitoDettaglio() {
             <ErrorBox error={pdf.error ?? elimina.error} />
           </section>
 
-          {s.stato === 'bozza' && <Invio s={s} controparte={controparte.data} />}
+          {s.stato !== 'inviato' && <Invio key={s.stato} s={s} controparte={controparte.data} />}
 
           <section className="card letter">
             <p className="letter-subject">Oggetto: {s.oggetto}</p>

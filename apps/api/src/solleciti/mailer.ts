@@ -3,6 +3,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { config, type SmtpConfig } from '../config';
 
 export interface Messaggio {
+  aziendaId: string;
   canale: 'email' | 'pec';
   to: string;
   replyTo?: string;
@@ -13,7 +14,8 @@ export interface Messaggio {
 
 /** Astrazione dell'invio: nei test la sostituiamo con una finta che registra i messaggi. */
 export abstract class Mailer {
-  abstract pecDisponibile(): boolean;
+  abstract pecDisponibile(aziendaId: string): boolean;
+  emailDisponibile(_aziendaId: string): boolean { return true; }
   abstract send(m: Messaggio): Promise<{ messageId: string }>;
 }
 
@@ -21,15 +23,27 @@ export abstract class Mailer {
 export class SmtpMailer extends Mailer {
   private readonly transports = new Map<string, Transporter>();
 
-  pecDisponibile() {
-    return config.pec !== null;
+  private autorizzato(aziendaId: string, cfg: SmtpConfig): boolean {
+    if (config.mailTenantId) return config.mailTenantId === aziendaId;
+    return process.env.NODE_ENV !== 'production'
+      && ['127.0.0.1', '::1'].includes(config.apiHost)
+      && ['localhost', '127.0.0.1', '::1'].includes(cfg.host)
+      && cfg.port === 1025 && !cfg.user && !cfg.pass;
+  }
+
+  pecDisponibile(aziendaId: string): boolean {
+    return config.pec !== null && this.autorizzato(aziendaId, config.pec);
+  }
+
+  override emailDisponibile(aziendaId: string): boolean {
+    return this.autorizzato(aziendaId, config.smtp);
   }
 
   async send(m: Messaggio) {
     const cfg = m.canale === 'pec' ? config.pec : config.smtp;
-    if (!cfg) {
+    if (!cfg || !this.autorizzato(m.aziendaId, cfg)) {
       throw new ServiceUnavailableException(
-        "Invio PEC non configurato: imposta PEC_SMTP_* con i dati del tuo gestore, oppure invia la PEC dalla tua casella e segna il sollecito come inviato.",
+        "Invio dal server non abilitato per questa azienda. Usa la tua casella e registra l’invio.",
       );
     }
     const info = await this.transport(m.canale, cfg).sendMail({

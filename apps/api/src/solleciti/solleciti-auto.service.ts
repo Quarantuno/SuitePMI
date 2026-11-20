@@ -52,17 +52,21 @@ export class SollecitiAutoService {
     const { anagrafiche, storico } = await this.dbs.withTenant(aziendaId, async (tx) => ({
       anagrafiche: await tx.select().from(controparti).where(inArray(controparti.id, ids)),
       storico: await tx
-        .select({ controparteId: solleciti.controparteId, livello: solleciti.livello, inviatoIl: solleciti.inviatoIl })
+        .select({ controparteId: solleciti.controparteId, livello: solleciti.livello, inviatoIl: solleciti.inviatoIl, stato: solleciti.stato })
         .from(solleciti)
-        .where(and(inArray(solleciti.controparteId, ids), eq(solleciti.stato, 'inviato'))),
+        .where(and(inArray(solleciti.controparteId, ids), inArray(solleciti.stato, ['inviato', 'in_invio', 'esito_incerto']))),
     }));
-    const pecDisponibile = this.mailer.pecDisponibile();
+    const pecDisponibile = this.mailer.pecDisponibile(aziendaId);
+    const emailDisponibile = this.mailer.emailDisponibile(aziendaId);
 
     const righe = anagrafiche.map((c) => {
       const dati = perCliente.get(c.id)!;
       const base = { controparte: { id: c.id, denominazione: c.denominazione }, ...dati, escluso: !c.sollecitiAutomatici };
       if (!c.sollecitiAutomatici) {
         return { ...base, decisione: { azione: 'salta' as const, livello: null, motivo: 'Cliente escluso dai solleciti automatici.' } };
+      }
+      if (storico.some((s) => s.controparteId === c.id && s.stato !== 'inviato')) {
+        return { ...base, decisione: { azione: 'salta' as const, livello: null, motivo: 'Esito dell’invio precedente da verificare.' } };
       }
       const decisione = decidiSollecitoAutomatico({
         storico: storico
@@ -71,7 +75,7 @@ export class SollecitiAutoService {
         oggi,
         giorniRitardoMax: dati.giorniRitardoMax,
         impostazioni: { giorniPrimoContatto: azienda.sollecitiAutoGiorni, livelloMassimo: azienda.sollecitiAutoLivelloMax },
-        contatti: { email: c.email, pec: c.pec },
+        contatti: { email: emailDisponibile ? c.email : null, pec: c.pecConfermata ? c.pec : null },
         pecDisponibile,
       });
       return { ...base, decisione };
@@ -104,7 +108,7 @@ export class SollecitiAutoService {
           bozzaId = bozza.id;
           esito.inviati.push(await this.solleciti.invia(user, bozza.id, { canale: d.canale, destinatario: d.destinatario }));
         } catch (err) {
-          // Una bozza non inviata non deve restare a metà: la togliamo, il giro di domani riproverà.
+          // Solo le bozze sono eliminabili. Gli invii riservati devono essere riconciliati prima di riprovare.
           if (bozzaId) await this.solleciti.remove(user, bozzaId).catch(() => undefined);
           const msg = (err as Error).message;
           // Gli errori dell'API (es. dati mancanti) sono già leggibili; quelli del server di posta no.

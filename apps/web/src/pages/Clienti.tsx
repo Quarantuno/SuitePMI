@@ -118,7 +118,7 @@ export function Clienti() {
                   <td>{etichettaTipo[c.tipo]}</td>
                   <td className="num">{c.partitaIva ?? <span className="muted">consumatore</span>}</td>
                   <td className="small">
-                    {c.pec && <div>PEC: {c.pec}</div>}
+                    <RecapitoPec cliente={c} />
                     {c.email && <div>{c.email}</div>}
                     {c.telefono && <div>{c.telefono}</div>}
                   </td>
@@ -141,6 +141,40 @@ export function Clienti() {
           </table>
         )}
       </section>
+    </>
+  );
+}
+
+function RecapitoPec({ cliente }: { cliente: Controparte }) {
+  const cache = useQueryClient();
+  const [aperto, setAperto] = useState(false);
+  const salva = useMutation({
+    mutationFn: (pec: string) => api<Controparte>('/controparti/' + cliente.id, { method: 'PATCH', body: { pec } }),
+    onSuccess: async () => {
+      setAperto(false);
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['controparti'] }),
+        cache.invalidateQueries({ queryKey: ['controparte', cliente.id] }),
+        cache.invalidateQueries({ queryKey: ['solleciti-piano'] }),
+      ]);
+    },
+  });
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    salva.mutate(String(new FormData(event.currentTarget).get('pec') ?? ''));
+  }
+
+  return aperto ? (
+    <form className="inline-form" onSubmit={submit}>
+      <Field label="PEC verificata" name="pec" type="email" defaultValue={cliente.pec ?? ''} required />
+      <Button disabled={salva.isPending}>Salva</Button>
+      <Button type="button" variant="ghost" disabled={salva.isPending} onClick={() => setAperto(false)}>Annulla</Button>
+      <ErrorBox error={salva.error} />
+    </form>
+  ) : (
+    <>
+      {cliente.pec && <div>PEC: {cliente.pec}</div>}
+      <Button variant="ghost" onClick={() => setAperto(true)}>{cliente.pec ? 'Modifica PEC' : 'Inserisci PEC'}</Button>
     </>
   );
 }
