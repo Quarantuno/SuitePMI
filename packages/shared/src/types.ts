@@ -136,7 +136,7 @@ export interface Sollecito {
   id: string;
   controparte: { id: string; denominazione: string };
   livello: LivelloSollecitoApi;
-  stato: 'bozza' | 'inviato';
+  stato: 'bozza' | 'in_invio' | 'esito_incerto' | 'inviato';
   alla: IsoDate;
   oggetto: string;
   testo: string;

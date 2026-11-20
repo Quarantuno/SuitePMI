@@ -84,6 +84,18 @@ describe('nucleo: autenticazione', () => {
       .expect(409);
   });
 
+  it('consente installazioni distinte con la stessa partita IVA senza condividere i dati', async () => {
+    const risposta = await http.post('/api/auth/register').send({
+      email: 'seconda-azienda@officina.it',
+      password: 'password-sicura-1',
+      nome: 'Secondo titolare',
+      ragioneSociale: 'Seconda configurazione',
+      partitaIva: a.azienda.partitaIva,
+    }).expect(201);
+    expect(risposta.body.azienda.id).not.toBe(a.azienda.id);
+    await http.get('/api/controparti').set(auth(risposta.body)).expect(200, []);
+  });
+
   it('login e /me', async () => {
     await http.post('/api/auth/login').send({ email: 'titolare@officina.it', password: 'sbagliata' }).expect(401);
     await http.post('/api/auth/login').send({ email: 'nessuno@officina.it', password: 'sbagliata' }).expect(401);
@@ -151,7 +163,7 @@ describe('modulo incassi', () => {
 
     const clienti = await http.get('/api/controparti?tipo=cliente').set(auth(a)).expect(200);
     const cliente = clienti.body.find((c: { partitaIva: string }) => c.partitaIva === '01234567897');
-    expect(cliente.pec).toBe('amministrazione@pec.clientedemo.it');
+    expect(cliente.pec).toBeNull();
   });
 
   it('non importa due volte la stessa fattura', async () => {

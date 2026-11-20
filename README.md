@@ -49,7 +49,7 @@ metadati `_MT_`.
 
 L’import gestisce questi tipi di documento.
 
-- **fatture in lotto**: un file con più `FatturaElettronicaBody` importa tutti i documenti;
+- **fatture in lotto**: un file può contenere fino a 100 documenti.
   quelli già registrati vengono saltati (ed elencati) senza bloccare gli altri;
 - **fatture semplificate** (tracciato FSM10, art. 21-bis d.P.R. 633/1972): la TD07 diventa
   una fattura con scadenza a 30 giorni, la TD08 una nota di credito collegata tramite
@@ -114,16 +114,23 @@ successivo firmato dal titolare. Le regole sono in `decidiSollecitoAutomatico`
 - la diffida parte solo via PEC, gli altri livelli via email (o PEC se manca l'email);
 - i clienti esclusi dalla pagina **Clienti** non ricevono nulla.
 
-La pagina **Solleciti** mostra il piano di oggi cliente per cliente, con il motivo di ogni
-invio o salto, e il pulsante **Invia ora**. Se un invio fallisce la bozza viene scartata e
-il giro del giorno dopo riprova. Lo scheduler è dentro l'API: con più istanze lascialo
-attivo su una sola (`SOLLECITI_AUTO_SCHEDULER=false` sulle altre).
+La pagina **Solleciti** mostra il piano di oggi cliente per cliente. SuitePMI
+riserva la bozza prima di contattare il gestore. Se il gestore risponde con un
+errore o l’API si interrompe, verifica l’esito prima di procedere. Puoi
+confermare l’invio dal dettaglio dopo averlo riscontrato presso il gestore.
+Se il tentativo si è concluso con un errore, puoi riaprire la bozza dopo aver
+verificato la mancata consegna.
 
-**Email e PEC in locale** finiscono in Mailpit: apri http://localhost:8025 per
-vederle. In produzione configura `SMTP_*` con il tuo provider e `PEC_SMTP_*` con
-l'SMTP del gestore PEC (senza `PEC_SMTP_HOST` l'invio PEC è disattivato). Nota:
-una PEC ha valore legale solo se parte da una casella PEC vera; per ora la
-casella è unica per tutta l'installazione (vedi prossimi passi).
+**Email e PEC in locale** usano il Mailpit senza credenziali su loopback,
+consultabile su [localhost:8025](http://localhost:8025). Fuori da questo
+ambiente gli invii dal server sono abilitati solo per l’azienda il cui UUID
+corrisponde a `MAIL_TENANT_ID`. Configura `SMTP_*` e `PEC_SMTP_*` con caselle
+che appartengono a quell’azienda. Le altre aziende possono scaricare il PDF e
+registrare un invio effettuato dalla propria casella.
+
+Il recapito PEC dell’anagrafica va inserito o confermato dalla pagina **Clienti**.
+Dopo la migrazione, usa **Inserisci PEC** accanto alla controparte per confermare nuovamente i recapiti prima di usarli
+per gli invii. L’import delle fatture lascia invariata l’anagrafica PEC.
 
 ### Cassa
 
@@ -230,7 +237,9 @@ le richieste nell'API e descrivono i form nel frontend.
 ### Sicurezza
 
 - Isolamento dei dati tra aziende con Row-Level Security (vedi sopra).
-- Password con Argon2, tempi di risposta del login uniformi anche per email inesistenti.
+- Password con Argon2. In produzione imposta `JWT_SECRET` con una chiave casuale di almeno 32 caratteri.
+- PostgreSQL e Mailpit del Compose di sviluppo sono accessibili da loopback.
+- L’identificativo dell’azienda è interno. La partita IVA dichiarata serve ai documenti e non riserva un’azienda sulla piattaforma.
 - Limite di **10 tentativi al minuto per IP** su login e registrazione (`AUTH_RATE_LIMIT`).
   In produzione dietro un proxy imposta `TRUST_PROXY=true`, altrimenti tutti gli utenti
   sembrano lo stesso IP.
@@ -276,7 +285,7 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 
 ## Prossimi passi tecnici
 
-- Casella PEC e SMTP per singola azienda (oggi sono globali), con ricevute di accettazione e consegna.
+- Caselle PEC e SMTP configurabili per più aziende, con ricevute di accettazione e consegna.
 - Pratica per il decreto ingiuntivo da passare all'avvocato (fatture, solleciti, ricevute PEC).
 - Collegamento a un intermediario SdI (A-Cube o Openapi) per ricevere le fatture in automatico.
 - Token in cookie httpOnly con refresh, inviti di altri utenti, più aziende per utente.

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FatturaPAError, parseFatturaPA, parseFatturaPALotto } from './fatturapa.parser';
+import { FatturaPAError, parseFatturaPA, parseFatturaPALotto, riferimentiNotaStorica } from './fatturapa.parser';
 import { notaDiCredito } from '../../test/note-credito';
 import { lotto, semplificata, variante } from '../../test/xml-builder';
 
@@ -45,6 +45,15 @@ describe('parseFatturaPA', () => {
     expect(nota.collegate).toEqual([{ numero: '2026/0042', data: '2026-01-15' }]);
     const senzaRif = parseFatturaPA(notaDiCredito(xml, { numero: 'NC-6', data: '2026-02-20', importo: '10.00' }));
     expect(senzaRif.avvisi[0]).toMatch(/abbinala a mano/);
+  });
+
+  it('applica il limite dei nuovi lotti e conserva i riferimenti delle note storiche', () => {
+    const fatture = Array.from({ length: 100 }, (_, i) => variante(xml, { numero: 'F-' + i }));
+    const nota = notaDiCredito(xml, { numero: 'NC-storica', data: '2026-02-20', importo: '10.00', rif: 'F-0' });
+    expect(parseFatturaPALotto(lotto(...fatture))).toHaveLength(100);
+    const storico = lotto(...fatture, nota);
+    expect(() => parseFatturaPALotto(storico)).toThrow(FatturaPAError);
+    expect(riferimentiNotaStorica(storico, 'NC-storica', '2026-02-20')).toEqual([{ numero: 'F-0', data: '2026-01-15' }]);
   });
 
   it('legge tutti i documenti di un lotto con lo stesso header', () => {

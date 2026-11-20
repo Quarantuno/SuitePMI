@@ -12,7 +12,7 @@ import {
   type SollecitoInviaInput,
   type TestoSollecito,
 } from '@suite/shared';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { AziendaService } from '../azienda/azienda.service';
 import type { SessionUser } from '../common/auth';
 import { ContropartiService } from '../controparti/controparti.service';
@@ -66,7 +66,7 @@ export class SollecitiService {
     const avvisi: string[] = [];
     if (!ctx.mittente.iban) avvisi.push("Manca l'IBAN della tua azienda: aggiungilo in Impostazioni per indicare dove pagare.");
     if (!ctx.mittente.pec && livello === 'diffida') avvisi.push('Manca la PEC della tua azienda nelle Impostazioni.');
-    if (livello === 'diffida' && !ctx.controparte.pec) {
+    if (livello === 'diffida' && !ctx.controparte.pecConfermata) {
       avvisi.push('Il cliente non ha una PEC in anagrafica: la diffida ha valore probatorio se inviata via PEC o raccomandata A/R.');
     }
     if (!ctx.controparte.partitaIva) {
@@ -78,7 +78,7 @@ export class SollecitiService {
         id: ctx.controparte.id,
         denominazione: ctx.controparte.denominazione,
         email: ctx.controparte.email,
-        pec: ctx.controparte.pec,
+        pec: ctx.controparte.pecConfermata ? ctx.controparte.pec : null,
       },
       livello,
       suggerito,
@@ -137,9 +137,13 @@ export class SollecitiService {
 
   async remove(user: SessionUser, id: string): Promise<void> {
     await this.dbs.withTenant(user.aziendaId, async (tx) => {
-      const s = await this.load(tx, id);
-      if (s.stato !== 'bozza') throw new ConflictException('Un sollecito inviato non si può eliminare: resta nello storico');
-      await tx.delete(solleciti).where(eq(solleciti.id, id));
+      const [eliminato] = await tx.delete(solleciti)
+        .where(and(eq(solleciti.id, id), eq(solleciti.stato, 'bozza')))
+        .returning({ id: solleciti.id });
+      if (!eliminato) {
+        await this.load(tx, id);
+        throw new ConflictException('Solo le bozze possono essere eliminate');
+      }
     });
   }
 
@@ -154,21 +158,25 @@ export class SollecitiService {
    */
   async invia(user: SessionUser, id: string, input: SollecitoInviaInput): Promise<Sollecito> {
     const s = await this.get(user, id);
-    if (s.stato === 'inviato') throw new ConflictException('Sollecito già inviato');
+    const riconcilia = input.canale === 'manuale' && (s.stato === 'in_invio' || s.stato === 'esito_incerto');
+    if (s.stato !== 'bozza' && !riconcilia) throw new ConflictException('Sollecito già inviato o con invio da verificare');
 
-    let destinatario = input.destinatario ?? null;
+    let destinatario = riconcilia ? s.destinatario : input.destinatario ?? null;
     let inviatoIl = todayIso();
 
     if (input.canale === 'manuale') {
       inviatoIl = input.inviatoIl ?? inviatoIl;
     } else {
-      if (input.canale === 'pec' && !this.mailer.pecDisponibile()) {
+      const disponibile = input.canale === 'pec'
+        ? this.mailer.pecDisponibile(user.aziendaId)
+        : this.mailer.emailDisponibile(user.aziendaId);
+      if (!disponibile) {
         throw new BadRequestException(
-          'Invio PEC non configurato sul server: inviala dalla tua casella PEC e poi segna il sollecito come inviato.',
+          'Invio dal server non abilitato per questa azienda. Usa la tua casella e registra l’invio.',
         );
       }
       const controparte = await this.dbs.withTenant(user.aziendaId, (tx) => this.controparti.find(tx, s.controparte.id));
-      destinatario ??= input.canale === 'pec' ? controparte.pec : controparte.email;
+      destinatario ??= input.canale === 'pec' ? (controparte.pecConfermata ? controparte.pec : null) : controparte.email;
       if (!destinatario) {
         throw new BadRequestException(
           `Il cliente non ha ${input.canale === 'pec' ? 'una PEC' : "un'email"} in anagrafica: indica il destinatario.`,
@@ -176,22 +184,64 @@ export class SollecitiService {
       }
       const mittente = await this.azienda.get(user.aziendaId);
       const pdf = await this.renderPdf(user, s);
-      await this.mailer.send({
-        canale: input.canale,
-        to: destinatario,
-        replyTo: (input.canale === 'pec' ? mittente.pec : mittente.email) ?? mittente.email ?? undefined,
-        subject: s.oggetto,
-        text: s.testo,
-        attachments: [{ filename: this.nomeFile(s), content: pdf, contentType: 'application/pdf' }],
+      await this.dbs.withTenant(user.aziendaId, async (tx) => {
+        if (s.automatico) {
+          await tx.select({ id: controparti.id }).from(controparti)
+            .where(eq(controparti.id, s.controparte.id)).for('update');
+          const [precedente] = await tx.select({ id: solleciti.id }).from(solleciti).where(and(
+            eq(solleciti.controparteId, s.controparte.id),
+            or(
+              inArray(solleciti.stato, ['in_invio', 'esito_incerto']),
+              and(eq(solleciti.automatico, true), eq(solleciti.stato, 'inviato'), eq(solleciti.alla, s.alla)),
+            ),
+          )).limit(1);
+          if (precedente) throw new ConflictException('Esiste già un invio per il cliente da verificare o registrato per questo giro');
+        }
+        const [riservato] = await tx.update(solleciti)
+          .set({ stato: 'in_invio', canale: input.canale, destinatario })
+          .where(and(eq(solleciti.id, id), eq(solleciti.stato, 'bozza')))
+          .returning({ id: solleciti.id });
+        if (!riservato) throw new ConflictException('Sollecito già inviato o con invio da verificare');
       });
+      try {
+        await this.mailer.send({
+          aziendaId: user.aziendaId,
+          canale: input.canale,
+          to: destinatario,
+          replyTo: (input.canale === 'pec' ? mittente.pec : mittente.email) ?? mittente.email ?? undefined,
+          subject: s.oggetto,
+          text: s.testo,
+          attachments: [{ filename: this.nomeFile(s), content: pdf, contentType: 'application/pdf' }],
+        });
+      } catch (err) {
+        await this.dbs.withTenant(user.aziendaId, async (tx) => {
+          await tx.update(solleciti).set({ stato: 'esito_incerto' })
+            .where(and(eq(solleciti.id, id), eq(solleciti.stato, 'in_invio')));
+        });
+        throw err;
+      }
     }
 
     return this.dbs.withTenant(user.aziendaId, async (tx) => {
-      await tx
-        .update(solleciti)
-        .set({ stato: 'inviato', canale: input.canale, destinatario, inviatoIl })
-        .where(and(eq(solleciti.id, id), eq(solleciti.stato, 'bozza')));
+      const precedente = input.canale === 'manuale' ? s.stato : 'in_invio';
+      const [aggiornato] = await tx.update(solleciti)
+        .set({ stato: 'inviato', canale: riconcilia ? s.canale : input.canale, destinatario, inviatoIl })
+        .where(and(eq(solleciti.id, id), eq(solleciti.stato, precedente)))
+        .returning({ id: solleciti.id });
+      if (!aggiornato && input.canale === 'manuale') throw new ConflictException('Sollecito già inviato o con invio da verificare');
       return this.load(tx, id);
+    });
+  }
+
+  async riapri(user: SessionUser, id: string): Promise<Sollecito> {
+    return this.dbs.withTenant(user.aziendaId, async (tx) => {
+      const [aggiornato] = await tx.update(solleciti)
+        .set({ stato: 'bozza', canale: null, destinatario: null })
+        .where(and(eq(solleciti.id, id), eq(solleciti.stato, 'esito_incerto')))
+        .returning({ id: solleciti.id });
+      const sollecito = await this.load(tx, id);
+      if (!aggiornato) throw new ConflictException('Puoi riaprire solo un invio concluso con errore');
+      return sollecito;
     });
   }
 
@@ -246,7 +296,7 @@ export class SollecitiService {
     if (!controparte) throw new NotFoundException('Controparte non trovata');
     return lettera({
       mittente,
-      destinatario: controparte,
+      destinatario: { ...controparte, pec: controparte.pecConfermata ? controparte.pec : null },
       data: s.inviatoIl ?? todayIso(),
       oggetto: s.oggetto,
       testo: s.testo,

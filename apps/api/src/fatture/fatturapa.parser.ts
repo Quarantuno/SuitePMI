@@ -179,6 +179,7 @@ function leggiScadenze(body: unknown, dataDoc: IsoDate, totaleCents: number, avv
 function leggiOrdinaria(root: Node): FatturaPAParsed[] {
   const header = obj(root.FatturaElettronicaHeader);
   const bodies = (root.FatturaElettronicaBody as unknown[] | undefined) ?? [];
+  if (bodies.length > 100) throw new FatturaPAError('Il lotto può contenere al massimo 100 documenti');
   if (!header || bodies.length === 0) throw new FatturaPAError('Header o body della fattura mancanti');
 
   const cedente = soggetto(header.CedentePrestatore, 'cedente/prestatore');
@@ -208,6 +209,9 @@ function leggiOrdinaria(root: Node): FatturaPAParsed[] {
     );
 
     const notaDiCredito = tipoDocumento === 'TD04';
+    if (collegate.length > 100 || collegate.some((r) => r.numero.length > 100)) {
+      throw new FatturaPAError('Riferimenti a fatture collegate troppo estesi');
+    }
     if (notaDiCredito && collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
     return {
       tipoDocumento,
@@ -257,6 +261,7 @@ function soggettoSemplificato(node: unknown, ruolo: string): SoggettoFattura {
 function leggiSemplificata(root: Node): FatturaPAParsed[] {
   const header = obj(root.FatturaElettronicaHeader);
   const bodies = (root.FatturaElettronicaBody as unknown[] | undefined) ?? [];
+  if (bodies.length > 100) throw new FatturaPAError('Il lotto può contenere al massimo 100 documenti');
   if (!header || bodies.length === 0) throw new FatturaPAError('Header o body della fattura mancanti');
   const cedente = soggettoSemplificato(header.CedentePrestatore, 'cedente/prestatore');
   const cessionario = soggettoSemplificato(header.CessionarioCommittente, 'cessionario/committente');
@@ -278,6 +283,9 @@ function leggiSemplificata(root: Node): FatturaPAParsed[] {
       : [];
     // Per il resto dell'app una semplificata è una fattura (TD01) o una nota di credito (TD04).
     const notaDiCredito = tipo === 'TD08';
+    if (collegate.length > 100 || collegate.some((r) => r.numero.length > 100)) {
+      throw new FatturaPAError('Riferimenti a fatture collegate troppo estesi');
+    }
     if (notaDiCredito && collegate.length === 0) avvisi.push('Nota di credito senza riferimento alla fattura: abbinala a mano.');
     avvisi.push(`Fattura semplificata (${tipo}).`);
     return {
@@ -304,6 +312,21 @@ export function parseFatturaPALotto(xml: string): FatturaPAParsed[] {
   const semplificata = obj(doc.FatturaElettronicaSemplificata);
   if (semplificata) return leggiSemplificata(semplificata);
   throw new FatturaPAError('Il file non è una FatturaPA (manca FatturaElettronica)');
+}
+
+/** Legge solo la nota interessata da un lotto storico, anche se il lotto supera il limite dei nuovi import. */
+export function riferimentiNotaStorica(xml: string, numero: string, dataEmissione: string): FatturaPAParsed['collegate'] {
+  const doc = leggiXml(xml);
+  const ordinaria = obj(doc.FatturaElettronica);
+  const root = ordinaria ?? obj(doc.FatturaElettronicaSemplificata);
+  if (!root || !Array.isArray(root.FatturaElettronicaBody)) return [];
+  const nota = root.FatturaElettronicaBody.find((body) => {
+    const dati = obj(path(body, 'DatiGenerali', 'DatiGeneraliDocumento'));
+    return dati && str(dati.Numero) === numero && str(dati.Data) === dataEmissione;
+  });
+  if (!nota) return [];
+  const soloNota = { ...root, FatturaElettronicaBody: [nota] };
+  return (ordinaria ? leggiOrdinaria(soloNota) : leggiSemplificata(soloNota))[0]?.collegate ?? [];
 }
 
 /** Il primo documento del file (comodo nei test e per i file con una sola fattura). */

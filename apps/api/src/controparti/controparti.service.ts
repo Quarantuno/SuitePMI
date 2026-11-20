@@ -15,7 +15,7 @@ export function toControparte(r: Row): Controparte {
     partitaIva: r.partitaIva,
     codiceFiscale: r.codiceFiscale,
     email: r.email,
-    pec: r.pec,
+    pec: r.pecConfermata ? r.pec : null,
     telefono: r.telefono,
     indirizzo: r.indirizzo,
     note: r.note,
@@ -63,7 +63,7 @@ export class ContropartiService {
       return await this.dbs.withTenant(aziendaId, async (tx) => {
         const [row] = await tx
           .insert(controparti)
-          .values({ ...input, aziendaId })
+          .values({ ...input, aziendaId, pecConfermata: !!input.pec })
           .returning();
         return toControparte(row!);
       });
@@ -78,7 +78,7 @@ export class ContropartiService {
         await this.find(tx, id);
         const [row] = await tx
           .update(controparti)
-          .set({ ...input, updatedAt: new Date() })
+          .set({ ...input, pecConfermata: input.pec === undefined ? undefined : !!input.pec, updatedAt: new Date() })
           .where(eq(controparti.id, id))
           .returning();
         return toControparte(row!);

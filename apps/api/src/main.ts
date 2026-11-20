@@ -9,7 +9,7 @@ import { SollecitiScheduler } from './solleciti/solleciti.scheduler';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   configureApp(app);
-  await app.listen(config.port);
+  await app.listen(config.port, config.apiHost);
   if (config.sollecitiAutoScheduler) app.get(SollecitiScheduler).avvia();
   console.log(`API in ascolto su http://localhost:${config.port}/api`);
 }

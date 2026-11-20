@@ -35,7 +35,9 @@ const conScadenze = {
   },
 } as const;
 
-type FatturaConScadenze = typeof fatture.$inferSelect & {
+const colonneFattura = { xmlOriginale: false, riferimentiNota: false } as const;
+
+type FatturaConScadenze = Omit<typeof fatture.$inferSelect, keyof typeof colonneFattura> & {
   controparte: { id: string; denominazione: string };
   fatturaCollegata: { id: string; numero: string } | null;
   scadenze: (typeof scadenze.$inferSelect & { pagamenti: { importoCents: number; tipo: 'incasso' | 'nota_credito' }[] })[];
@@ -85,6 +87,7 @@ export class FattureService {
       const rows = await tx.query.fatture.findMany({
         where: direzione ? eq(fatture.direzione, direzione) : undefined,
         orderBy: [desc(fatture.dataEmissione), desc(fatture.createdAt)],
+        columns: colonneFattura,
         with: conScadenze,
       });
       const applicato = await this.applicatoPerNota(tx);
@@ -151,6 +154,9 @@ export class FattureService {
         `${d.numero}: ${etichettaTipoDocumento(d.tipoDocumento)} (${d.tipoDocumento}) — documento solo fiscale, non genera incassi né pagamenti.`,
     );
     const documenti = tutti.filter((d) => !TIPI_SOLO_FISCALI.has(d.tipoDocumento));
+    if (documenti.reduce((totale, doc) => totale + doc.scadenze.length, 0) > 1000) {
+      throw new BadRequestException('Il lotto può contenere al massimo 1000 rate');
+    }
     if (documenti.length === 0) {
       return { fattura: null, fatture: [], duplicate: [], ignorate, controparteCreata: false, avvisi: avvisiIgnorate };
     }
@@ -174,7 +180,6 @@ export class FattureService {
       return await this.dbs.withTenant(aziendaId, async (tx) => {
         const { id: controparteId, creata } = await this.trovaOCreaControparte(tx, aziendaId, altro, {
           tipo: direzione === 'attiva' ? 'cliente' : 'fornitore',
-          pec: siamoCedente ? primo.pecDestinatario : null,
         });
         const lotto = documenti.length > 1;
         const avvisi: string[] = [...avvisiIgnorate];
@@ -212,7 +217,7 @@ export class FattureService {
               dataEmissione: parsed.data,
               totaleCents: parsed.totaleCents,
               origine: 'xml',
-              xmlOriginale: xml,
+              riferimentiNota: parsed.tipoDocumento === 'TD04' ? parsed.collegate : undefined,
               tipoDocumento: parsed.tipoDocumento,
             })
             .returning();
@@ -269,24 +274,12 @@ export class FattureService {
           eq(fatture.direzione, fattura.direzione),
           eq(fatture.tipoDocumento, 'TD04'),
           isNull(fatture.fatturaCollegataId),
-          isNotNull(fatture.xmlOriginale),
+          sql`(${fatture.riferimentiNota} @> ${JSON.stringify([{ numero: fattura.numero, data: null }])}::jsonb
+            OR ${fatture.riferimentiNota} @> ${JSON.stringify([{ numero: fattura.numero, data: fattura.dataEmissione }])}::jsonb)`,
         ),
       );
     const avvisi: string[] = [];
     for (const nota of note) {
-      let rif: FatturaPAParsed['collegate'] = [];
-      try {
-        rif =
-          parseFatturaPALotto(nota.xmlOriginale!).find(
-            (d) => d.numero === nota.numero && d.data === nota.dataEmissione,
-          )?.collegate ?? [];
-      } catch {
-        continue; // XML salvato non più leggibile: resta da abbinare a mano
-      }
-      const corrisponde = rif.some(
-        (c) => c.numero === fattura.numero && (!c.data || c.data === fattura.dataEmissione),
-      );
-      if (!corrisponde) continue;
       const esito = await this.applicaNota(tx, aziendaId, nota, fattura);
       avvisi.push(`Nota di credito ${nota.numero} abbinata automaticamente.`, ...esito.slice(1));
     }
@@ -337,7 +330,7 @@ export class FattureService {
   }
 
   private async load(tx: Tx, id: string): Promise<Fattura> {
-    const f = await tx.query.fatture.findFirst({ where: eq(fatture.id, id), with: conScadenze });
+    const f = await tx.query.fatture.findFirst({ where: eq(fatture.id, id), columns: colonneFattura, with: conScadenze });
     if (!f) throw new NotFoundException('Fattura non trovata');
     const applicato = await this.applicatoPerNota(tx, id);
     return toFattura(f as FatturaConScadenze, applicato.get(id));
@@ -429,7 +422,7 @@ export class FattureService {
     tx: Tx,
     aziendaId: string,
     s: SoggettoFattura,
-    extra: { tipo: 'cliente' | 'fornitore'; pec: string | null },
+    extra: { tipo: 'cliente' | 'fornitore' },
   ): Promise<{ id: string; creata: boolean }> {
     const chiave = s.partitaIva
       ? eq(controparti.partitaIva, s.partitaIva)
@@ -442,9 +435,6 @@ export class FattureService {
       if (esistente.tipo !== 'entrambi' && esistente.tipo !== extra.tipo) {
         await tx.update(controparti).set({ tipo: 'entrambi' }).where(eq(controparti.id, esistente.id));
       }
-      if (!esistente.pec && extra.pec) {
-        await tx.update(controparti).set({ pec: extra.pec }).where(eq(controparti.id, esistente.id));
-      }
       return { id: esistente.id, creata: false };
     }
     const [nuova] = await tx
@@ -456,7 +446,6 @@ export class FattureService {
         partitaIva: s.partitaIva,
         codiceFiscale: s.codiceFiscale,
         indirizzo: s.indirizzo,
-        pec: extra.pec,
       })
       .returning({ id: controparti.id });
     return { id: nuova!.id, creata: true };

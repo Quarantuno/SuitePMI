@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -25,11 +26,22 @@ function required(name: string, devDefault: string): string {
   return devDefault;
 }
 
+function jwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV !== 'production') return randomBytes(32).toString('hex');
+  if (!secret || secret.trim().length < 32 || secret === 'cambia-questa-stringa-in-produzione') {
+    throw new Error('JWT_SECRET deve essere una chiave casuale di almeno 32 caratteri');
+  }
+  return secret;
+}
+
 export const config = {
   databaseUrl: required('DATABASE_URL', 'postgres://suite_app:suite_app_dev@localhost:5432/suite'),
   databaseAdminUrl: required('DATABASE_ADMIN_URL', 'postgres://postgres:postgres@localhost:5432/suite'),
-  jwtSecret: required('JWT_SECRET', 'solo-per-sviluppo-locale'),
+  jwtSecret: jwtSecret(),
+  mailTenantId: process.env.MAIL_TENANT_ID,
   port: Number(process.env.API_PORT ?? 3000),
+  apiHost: process.env.API_HOST ?? (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'),
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   /** Tentativi di login/registrazione per IP ogni minuto (contro gli attacchi a forza bruta). */
   authRateLimit: Number(process.env.AUTH_RATE_LIMIT ?? 10),

@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   integer,
+  jsonb,
   type AnyPgColumn,
   date,
   index,
@@ -27,7 +28,7 @@ const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull(
 export const aziende = pgTable('aziende', {
   id: uuid('id').primaryKey().defaultRandom(),
   ragioneSociale: text('ragione_sociale').notNull(),
-  partitaIva: text('partita_iva').notNull().unique(),
+  partitaIva: text('partita_iva').notNull(),
   // Dati usati nelle lettere e nei solleciti
   indirizzo: text('indirizzo'),
   email: text('email'),
@@ -87,6 +88,7 @@ export const controparti = pgTable(
     codiceFiscale: text('codice_fiscale'),
     email: text('email'),
     pec: text('pec'),
+    pecConfermata: boolean('pec_confermata').notNull().default(false),
     telefono: text('telefono'),
     indirizzo: text('indirizzo'),
     note: text('note'),
@@ -150,6 +152,7 @@ export const fatture = pgTable(
     /** Per le note di credito: la fattura che rettificano. */
     fatturaCollegataId: uuid('fattura_collegata_id').references((): AnyPgColumn => fatture.id, { onDelete: 'set null' }),
     xmlOriginale: text('xml_originale'),
+    riferimentiNota: jsonb('riferimenti_nota').$type<{ numero: string; data: string | null }[]>(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -201,7 +204,7 @@ export const solleciti = pgTable(
       .notNull()
       .references(() => controparti.id, { onDelete: 'restrict' }),
     livello: text('livello', { enum: ['promemoria', 'sollecito', 'diffida'] }).notNull(),
-    stato: text('stato', { enum: ['bozza', 'inviato'] }).notNull().default('bozza'),
+    stato: text('stato', { enum: ['bozza', 'in_invio', 'esito_incerto', 'inviato'] }).notNull().default('bozza'),
     /** Data a cui sono calcolati importi e interessi. */
     alla: date('alla', { mode: 'string' }).notNull(),
     oggetto: text('oggetto').notNull(),
