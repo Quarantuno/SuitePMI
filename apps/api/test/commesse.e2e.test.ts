@@ -53,6 +53,17 @@ it('collega fatture, distingue incassi e storni e registra i costi della commess
   const collega = (id: string, collegata: boolean) => http.patch('/api/commesse/' + id + '/fatture/' + fattura.id)
     .set(a).send({ collegata });
 
+  const elenco = () => http.get('/api/commesse').set(a).expect(200);
+  const aggiorna = (body: object) => http.patch('/api/commesse/' + commessa).set(a).send(body);
+  const nuovo = { nome: 'Sito web aggiornato', budgetCents: 270_000, stato: 'in_corso', scadenza: '2026-03-31' };
+  expect((await elenco()).body).toContainEqual(expect.objectContaining({ id: commessa, stato: 'da_avviare', scadenza: null }));
+  await aggiorna({ ...nuovo, scadenza: '2026-02-30' }).expect(400);
+  await http.patch('/api/commesse/' + commessa).set(b).send(nuovo).expect(404);
+  await aggiorna(nuovo).expect(204);
+  expect((await elenco()).body).toContainEqual(expect.objectContaining({ id: commessa, ...nuovo }));
+  await aggiorna({ nome: nuovo.nome, budgetCents: nuovo.budgetCents, scadenza: null }).expect(204);
+  expect((await elenco()).body).toContainEqual(expect.objectContaining({ id: commessa, ...nuovo, scadenza: null }));
+
   const iniziale = await http.get(rotta).set(a).expect(200);
   expect(iniziale.body.disponibili).toMatchObject([{ id: fattura.id }]);
   await collega(altraCommessa, true).expect(400);

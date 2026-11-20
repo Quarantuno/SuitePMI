@@ -8,6 +8,8 @@ const datiCommessa = {
   id: commesse.id,
   nome: commesse.nome,
   budgetCents: commesse.budgetCents,
+  stato: commesse.stato,
+  scadenza: commesse.scadenza,
   cliente: { id: controparti.id, denominazione: controparti.denominazione },
 };
 
@@ -34,7 +36,8 @@ export class CommesseService {
       if (!cliente) throw new NotFoundException('Cliente non trovato');
 
       const [commessa] = await tx.insert(commesse).values({ aziendaId, ...input }).returning();
-      return { id: commessa!.id, nome: input.nome, budgetCents: input.budgetCents, cliente };
+      const { id, nome, budgetCents, stato, scadenza } = commessa!;
+      return { id, nome, budgetCents, stato, scadenza, cliente };
     });
   }
 

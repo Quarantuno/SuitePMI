@@ -64,6 +64,13 @@
       "when": 1795074117438,
       "tag": "0008_costi_commessa",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795162648129,
+      "tag": "0009_stato_commesse",
+      "breakpoints": true
     }
   ]
 }

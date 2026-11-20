@@ -1,3 +1,4 @@
+import { statiCommessa } from '@suite/shared';
 import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
@@ -109,6 +110,8 @@ export const commesse = pgTable(
     clienteId: uuid('cliente_id').notNull().references(() => controparti.id, { onDelete: 'restrict' }),
     nome: text('nome').notNull(),
     budgetCents: cents('budget_cents').notNull(),
+    stato: text('stato', { enum: statiCommessa }).notNull().default('da_avviare'),
+    scadenza: date('scadenza', { mode: 'string' }),
   },
   (t) => [index('commesse_azienda_idx').on(t.aziendaId)],
 );
