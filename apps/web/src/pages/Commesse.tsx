@@ -1,16 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { formatData, parseEuroToCents, type AggiornaCommessaInput, type Commessa, type CommessaInput, type Controparte, type FatturaCommessa } from '@suite/shared';
+import { formatData, parseEuroToCents, statiCommessa, todayIso, type AggiornaCommessaInput, type Commessa, type CommessaInput, type Controparte, type FatturaCommessa, type StatoCommessa } from '@suite/shared';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { CostiCommessa } from './CostiCommessa';
 import { Button, Empty, ErrorBox, Field, Money, PageHeader, Select } from '../ui';
 
+const etichetteStato: Record<StatoCommessa, string> = {
+  da_avviare: 'Da avviare',
+  in_corso: 'In corso',
+  completata: 'Completata',
+};
+
+function inRitardo(commessa: Commessa, oggi: string): boolean {
+  return commessa.stato !== 'completata' && commessa.scadenza !== null && commessa.scadenza < oggi;
+}
+
 export function Commesse() {
   const cache = useQueryClient();
   const navigate = useNavigate();
+  const [filtro, setFiltro] = useState('tutte');
+  const oggi = todayIso();
   const elenco = useQuery({ queryKey: ['commesse'], queryFn: () => api<Commessa[]>('/commesse') });
   const clienti = useQuery({ queryKey: ['controparti'], queryFn: () => api<Controparte[]>('/controparti') });
+  const visibili = elenco.data?.filter((commessa) => {
+    if (filtro === 'ritardo') return inRitardo(commessa, oggi);
+    if (filtro === 'aperte') return commessa.stato !== 'completata';
+    return filtro === 'tutte' || commessa.stato === filtro;
+  }) ?? [];
   const opzioni = clienti.data?.filter((cliente) => cliente.tipo !== 'fornitore') ?? [];
   const crea = useMutation({
     mutationFn: (form: FormData) => {
@@ -18,6 +35,7 @@ export function Commesse() {
         clienteId: String(form.get('clienteId') ?? ''),
         nome: String(form.get('nome') ?? ''),
         budgetCents: parseEuroToCents(String(form.get('budget') ?? '')),
+        scadenza: String(form.get('scadenza') ?? '') || null,
       };
       return api<Commessa>('/commesse', { body });
     },
@@ -49,6 +67,7 @@ export function Commesse() {
               {opzioni.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.denominazione}</option>)}
             </Select>
             <Field label="Budget lordo (€)" name="budget" inputMode="decimal" required />
+            <Field label="Scadenza" name="scadenza" type="date" />
             <Button disabled={crea.isPending}>{crea.isPending ? 'Creazione…' : 'Crea commessa'}</Button>
           </form>
         )}
@@ -57,18 +76,28 @@ export function Commesse() {
       {elenco.data?.length === 0 && <Empty title="Nessuna commessa" />}
       {!!elenco.data?.length && (
         <section className="card table-wrap">
-          <table>
-            <thead><tr><th>Commessa</th><th>Cliente</th><th className="r">Budget lordo</th></tr></thead>
-            <tbody>
-              {elenco.data.map((commessa) => (
-                <tr key={commessa.id}>
-                  <td><Link to={commessa.id}>{commessa.nome}</Link></td>
-                  <td>{commessa.cliente.denominazione}</td>
-                  <td className="r"><Money cents={commessa.budgetCents} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Select label="Filtra per stato" value={filtro} onChange={(event) => setFiltro(event.target.value)}>
+            <option value="tutte">Tutte</option>
+            <option value="aperte">Aperte</option>
+            <option value="ritardo">In ritardo</option>
+            {statiCommessa.map((stato) => <option key={stato} value={stato}>{etichetteStato[stato]}</option>)}
+          </Select>
+          {visibili.length === 0 ? <Empty title="Nessuna commessa corrisponde al filtro" /> : (
+            <table>
+              <thead><tr><th>Commessa</th><th>Cliente</th><th>Stato</th><th>Scadenza</th><th className="r">Budget lordo</th></tr></thead>
+              <tbody>
+                {visibili.map((commessa) => (
+                  <tr key={commessa.id}>
+                    <td><Link to={commessa.id}>{commessa.nome}</Link></td>
+                    <td>{commessa.cliente.denominazione}</td>
+                    <td>{etichetteStato[commessa.stato]}</td>
+                    <td>{commessa.scadenza ? formatData(commessa.scadenza) : '—'}{inRitardo(commessa, oggi) ? ' · In ritardo' : ''}</td>
+                    <td className="r"><Money cents={commessa.budgetCents} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
     </>
@@ -111,7 +140,12 @@ export function CommessaDettaglio() {
 
   return (
     <>
-      <PageHeader title={commessa.nome} subtitle={commessa.cliente.denominazione} actions={<Link to="/commesse">Tutte le commesse</Link>} />
+      <PageHeader title={commessa.nome} subtitle={[
+        commessa.cliente.denominazione,
+        etichetteStato[commessa.stato],
+        commessa.scadenza && 'Scadenza ' + formatData(commessa.scadenza),
+        inRitardo(commessa, todayIso()) && 'In ritardo',
+      ].filter(Boolean).join(' · ')} actions={<Link to="/commesse">Tutte le commesse</Link>} />
       <ModificaCommessa key={commessa.id} commessa={commessa} />
       <ErrorBox error={documenti.error ?? collega.error} />
       {documenti.isPending && <p>Caricamento fatture…</p>}
@@ -172,6 +206,8 @@ function ModificaCommessa({ commessa }: { commessa: Commessa }) {
       const body: AggiornaCommessaInput = {
         nome: String(form.get('nome') ?? ''),
         budgetCents: parseEuroToCents(String(form.get('budget') ?? '')),
+        stato: statiCommessa.find((stato) => stato === form.get('stato')),
+        scadenza: String(form.get('scadenza') ?? '') || null,
       };
       return api<void>('/commesse/' + commessa.id, { method: 'PATCH', body });
     },
@@ -197,6 +233,10 @@ function ModificaCommessa({ commessa }: { commessa: Commessa }) {
       <form className="inline-form" onSubmit={submit}>
         <Field label="Nome" name="nome" defaultValue={commessa.nome} required maxLength={160} />
         <Field label="Budget lordo (€)" name="budget" defaultValue={(commessa.budgetCents / 100).toFixed(2).replace('.', ',')} inputMode="decimal" required />
+        <Select label="Stato" name="stato" defaultValue={commessa.stato}>
+          {statiCommessa.map((stato) => <option key={stato} value={stato}>{etichetteStato[stato]}</option>)}
+        </Select>
+        <Field label="Scadenza" name="scadenza" type="date" defaultValue={commessa.scadenza ?? ''} />
         <Button disabled={salva.isPending}>Salva</Button>
         <Button variant="ghost" type="button" disabled={salva.isPending} onClick={() => {
           salva.reset();

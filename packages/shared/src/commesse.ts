@@ -1,10 +1,15 @@
 import { z } from 'zod';
 import { isoDate } from './schemas';
 
+export const statiCommessa = ['da_avviare', 'in_corso', 'completata'] as const;
+export type StatoCommessa = (typeof statiCommessa)[number];
+
 export const commessaSchema = z.object({
   clienteId: z.uuid(),
   nome: z.string().trim().min(1).max(160),
   budgetCents: z.number().int().min(0).max(100_000_000_000),
+  stato: z.enum(statiCommessa).optional(),
+  scadenza: isoDate.nullable().optional(),
 });
 
 export const aggiornaCommessaSchema = commessaSchema.omit({ clienteId: true });
@@ -20,6 +25,8 @@ export interface Commessa {
   nome: string;
   cliente: { id: string; denominazione: string };
   budgetCents: number;
+  stato: StatoCommessa;
+  scadenza: string | null;
 }
 
 export interface FatturaCommessa {
