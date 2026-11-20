@@ -5,7 +5,7 @@
 Importa le fatture elettroniche, segui i crediti dei clienti e controlla
 budget, ore e spese per ogni commessa.
 
-[Avvio rapido](#avvio-rapido) · [Guida ai moduli](#guida-ai-moduli) · [Sviluppo](#sviluppo) · [API](#api)
+[Avvio rapido](#avvio-rapido) · [Guida ai moduli](#guida-ai-moduli) · [Sviluppo](#sviluppo) · [API](#api) · [Sito di documentazione (sorgenti)](docs/)
 
 ## Cosa puoi fare
 
