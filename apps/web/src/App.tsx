@@ -2,6 +2,7 @@ import { Navigate, NavLink, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import { Cassa } from './pages/Cassa';
 import { Clienti } from './pages/Clienti';
+import { Assenze } from './pages/Assenze';
 import { Personale } from './pages/Personale';
 import { Commesse, CommessaDettaglio } from './pages/Commesse';
 import { Crediti } from './pages/Crediti';
@@ -72,6 +73,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<Crediti />} />
         <Route path="personale" element={<Personale />} />
+        <Route path="personale/assenze" element={<Assenze />} />
         <Route path="commesse" element={<Commesse />} />
         <Route path="commesse/:id" element={<CommessaDettaglio />} />
         <Route path="fatture" element={<Fatture />} />

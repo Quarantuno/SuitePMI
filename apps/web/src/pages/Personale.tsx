@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatData, type Persona, type PersonaInput, type StatoPersona } from '@suite/shared';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Button, Empty, ErrorBox, Field, PageHeader, Select, fieldError } from '../ui';
 
@@ -24,8 +25,11 @@ export function Personale() {
 
   return (
     <>
-      <PageHeader title="Personale" actions={organico.isSuccess && !scheda && (
-        <Button onClick={() => setScheda('nuova')}>Aggiungi persona</Button>
+      <PageHeader title="Personale" actions={organico.isSuccess && (
+        <>
+          <Link to="/personale/assenze">Ferie e permessi</Link>
+          {!scheda && <Button onClick={() => setScheda('nuova')}>Aggiungi persona</Button>}
+        </>
       )} />
       <ErrorBox error={organico.error} />
       {organico.isPending && <p>Caricamento personale…</p>}

@@ -294,3 +294,24 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 .inline-field.spaziato { margin: 8px 0 12px; }
 
 .kpi dd { margin-inline-start: 0; }
+
+.mese-assenze { text-transform: capitalize; }
+.calendario-assenze {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-block: 1rem;
+}
+.calendario-giorno { text-align: center; }
+.calendario-cella {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 5rem;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.calendario-cella .badge { display: block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 680px) { .calendario-assenze { display: none; } }

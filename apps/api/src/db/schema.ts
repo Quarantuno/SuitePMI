@@ -1,4 +1,4 @@
-import { statiCommessa } from '@suite/shared';
+import { statiCommessa, tipiAssenza } from '@suite/shared';
 import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
@@ -93,6 +93,23 @@ export const personale = pgTable(
   (t) => [
     index('personale_azienda_idx').on(t.aziendaId),
     check('personale_date_coerenti', sql`${t.dataUscita} >= ${t.dataIngresso}`),
+  ],
+);
+
+export const assenze = pgTable(
+  'assenze',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    personaId: uuid('persona_id').notNull().references(() => personale.id, { onDelete: 'cascade' }),
+    tipo: text('tipo', { enum: tipiAssenza }).notNull(),
+    dal: date('dal', { mode: 'string' }).notNull(),
+    al: date('al', { mode: 'string' }).notNull(),
+  },
+  (t) => [
+    index('assenze_azienda_dal_idx').on(t.aziendaId, t.dal),
+    index('assenze_persona_idx').on(t.personaId),
+    check('assenze_date_coerenti', sql`${t.al} >= ${t.dal}`),
   ],
 );
 

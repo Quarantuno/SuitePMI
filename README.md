@@ -15,7 +15,7 @@ budget, ore e spese per ogni commessa.
 | **Solleciti** | Promemoria, solleciti e diffide con PDF, storico e invio via email o PEC. |
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
 | **Commesse** | Budget, stato, scadenza, fatture collegate e registrazione di ore e spese. |
-| **Personale** | Anagrafica, mansioni, email di lavoro e date di ingresso e uscita. |
+| **Personale** | Anagrafica, mansioni, email di lavoro, ingressi e uscite, ferie e permessi. |
 
 ## Avvio rapido
 
@@ -170,6 +170,10 @@ Titolari e amministratori possono creare e aggiornare le schede dalla pagina
 l’elenco per stato. Lo stato deriva dalle date di ingresso e uscita. La persona
 risulta attiva fino all’ultimo giorno di lavoro compreso.
 
+Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera e
+consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
+per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
+
 ## Sviluppo
 
 `main` è il branch stabile. Gli aggiornamenti in lavorazione arrivano su
@@ -292,6 +296,8 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | DELETE | `/commesse/:id/costi/:costoId` | Elimina una voce di costo |
 | GET/POST | `/personale` | Elenco e creazione delle schede del personale |
 | PUT | `/personale/:id` | Aggiorna una scheda del personale |
+| GET/POST | `/personale/assenze` | Calendario per mese (`?mese=AAAA-MM`) e registrazione delle assenze |
+| DELETE | `/personale/assenze/:id` | Rimuove un’assenza |
 
 ## Prossimi passi tecnici
 
