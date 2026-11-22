@@ -15,6 +15,7 @@ budget, ore e spese per ogni commessa.
 | **Solleciti** | Promemoria, solleciti e diffide con PDF, storico e invio via email o PEC. |
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
 | **Commesse** | Budget, stato, scadenza, fatture collegate e registrazione di ore e spese. |
+| **Personale** | Anagrafica, mansioni, email di lavoro e date di ingresso e uscita. |
 
 ## Avvio rapido
 
@@ -162,6 +163,13 @@ Nel dettaglio della commessa, **Ore e spese** registra data, descrizione e
 costo totale della voce. Per il lavoro si inserisce anche la durata in minuti.
 Il riepilogo mostra il tempo registrato e i costi di lavoro e spesa.
 
+### Personale
+
+Titolari e amministratori possono creare e aggiornare le schede dalla pagina
+**Personale**. Usa la ricerca per nome, mansione o email di lavoro e filtra
+l’elenco per stato. Lo stato deriva dalle date di ingresso e uscita. La persona
+risulta attiva fino all’ultimo giorno di lavoro compreso.
+
 ## Sviluppo
 
 `main` è il branch stabile. Gli aggiornamenti in lavorazione arrivano su
@@ -282,6 +290,8 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | PATCH | `/commesse/:id/fatture/:fatturaId` | Collega o scollega la fattura |
 | GET/POST | `/commesse/:id/costi` | Elenco e registrazione di ore e spese |
 | DELETE | `/commesse/:id/costi/:costoId` | Elimina una voce di costo |
+| GET/POST | `/personale` | Elenco e creazione delle schede del personale |
+| PUT | `/personale/:id` | Aggiorna una scheda del personale |
 
 ## Prossimi passi tecnici
 

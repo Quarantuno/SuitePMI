@@ -78,6 +78,13 @@
       "when": 1795180086075,
       "tag": "0010_limiti_e_isolamento",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795358681698,
+      "tag": "0011_personale",
+      "breakpoints": true
     }
   ]
 }

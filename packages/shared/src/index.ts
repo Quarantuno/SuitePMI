@@ -10,3 +10,4 @@ export * from './csv';
 export * from './tipi-documento';
 
 export * from './commesse';
+export * from './personale';

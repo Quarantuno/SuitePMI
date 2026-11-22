@@ -3,6 +3,7 @@ import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  check,
   integer,
   jsonb,
   type AnyPgColumn,
@@ -76,6 +77,24 @@ const aziendaId = () =>
   uuid('azienda_id')
     .notNull()
     .references(() => aziende.id, { onDelete: 'cascade' });
+
+export const personale = pgTable(
+  'personale',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    nome: text('nome').notNull(),
+    cognome: text('cognome').notNull(),
+    emailLavoro: text('email_lavoro'),
+    mansione: text('mansione').notNull(),
+    dataIngresso: date('data_ingresso', { mode: 'string' }).notNull(),
+    dataUscita: date('data_uscita', { mode: 'string' }),
+  },
+  (t) => [
+    index('personale_azienda_idx').on(t.aziendaId),
+    check('personale_date_coerenti', sql`${t.dataUscita} >= ${t.dataIngresso}`),
+  ],
+);
 
 export const controparti = pgTable(
   'controparti',
