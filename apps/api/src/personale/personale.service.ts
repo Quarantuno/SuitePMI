@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { addDays, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type StatoPersona } from '@suite/shared';
+import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type StatoPersona } from '@suite/shared';
 import { and, asc, eq, gt, gte, inArray, lt, lte, or } from 'drizzle-orm';
 import type { SessionUser } from '../common/auth';
+import { generaProspettoPaghePdf } from './prospetto-paghe.pdf';
 import { DbService, type Tx } from '../db/db.service';
-import { assenze, membri, personale } from '../db/schema';
+import { assenze, aziende, membri, personale, prospettiPaghe } from '../db/schema';
 
 const campiPersona = {
   id: personale.id,
@@ -104,6 +105,54 @@ export class PersonaleService {
       const [rimossa] = await tx.delete(assenze).where(eq(assenze.id, id)).returning({ id: assenze.id });
       if (!rimossa) throw new NotFoundException('Assenza non trovata');
     });
+  }
+
+  prospetti(user: SessionUser, mese: string): Promise<ProspettoPaghe[]> {
+    return this.perTitolari(user, async (tx) => {
+      const righe = await tx.select({
+        prospetto: prospettiPaghe,
+        persona: { nome: personale.nome, cognome: personale.cognome, mansione: personale.mansione },
+      }).from(prospettiPaghe)
+        .innerJoin(personale, eq(prospettiPaghe.personaId, personale.id))
+        .where(eq(prospettiPaghe.mese, mese))
+        .orderBy(asc(personale.cognome), asc(personale.nome), asc(personale.id));
+      return righe.map(({ prospetto: { aziendaId: _aziendaId, ...dati }, persona }) =>
+        ({ ...dati, persona, saldoCents: saldoPaghe(dati) }));
+    });
+  }
+
+  salvaProspetto(user: SessionUser, input: ProspettoPagheInput): Promise<ProspettoPaghe> {
+    return this.perTitolari(user, async (tx) => {
+      const persona = await tx.query.personale.findFirst({
+        columns: { nome: true, cognome: true, mansione: true },
+        where: eq(personale.id, input.personaId),
+      });
+      if (!persona) throw new NotFoundException('Persona non trovata');
+      const { personaId, mese, ...movimenti } = input;
+      const [prospetto] = await tx.insert(prospettiPaghe).values({ aziendaId: user.aziendaId, ...input })
+        .onConflictDoUpdate({
+          target: [prospettiPaghe.aziendaId, prospettiPaghe.mese, prospettiPaghe.personaId],
+          set: movimenti,
+        }).returning({ id: prospettiPaghe.id });
+      return { ...input, id: prospetto!.id, persona, saldoCents: saldoPaghe(input) };
+    });
+  }
+
+  async pdfProspetto(user: SessionUser, id: string): Promise<Buffer> {
+    const dati = await this.perTitolari(user, async (tx) => {
+      const [riga] = await tx.select({
+        prospetto: prospettiPaghe,
+        persona: { nome: personale.nome, cognome: personale.cognome, mansione: personale.mansione },
+        azienda: { ragioneSociale: aziende.ragioneSociale },
+      }).from(prospettiPaghe)
+        .innerJoin(personale, eq(prospettiPaghe.personaId, personale.id))
+        .innerJoin(aziende, eq(prospettiPaghe.aziendaId, aziende.id))
+        .where(eq(prospettiPaghe.id, id));
+      if (!riga) throw new NotFoundException('Prospetto non trovato');
+      return riga;
+    });
+    return generaProspettoPaghePdf({ ...dati.prospetto, persona: dati.persona, saldoCents: saldoPaghe(dati.prospetto) },
+      dati.azienda.ragioneSociale);
   }
 
   private async bloccaPersona(tx: Tx, id: string) {

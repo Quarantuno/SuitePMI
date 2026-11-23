@@ -57,6 +57,27 @@ it('gestisce il personale, valida le date e limita accesso e modifica al tenant 
   expect((await http.get(endpoint).set(auth(principale)).expect(200)).body)
     .toMatchObject([{ id: ingresso.id, ...cessato, stato: 'cessato' }]);
 
+  const paghe = endpoint + '/paghe';
+  const voci = { personaId: ingresso.id, mese: '2020-12', lordoCents: 240_000, competenzeCents: 20_000,
+    contributiCents: 18_000, ritenuteCents: 32_000, trattenuteCents: 1500 };
+  await http.get(paghe + '?mese=2020-12').expect(401);
+  await http.get(paghe + '?mese=2020-13').set(auth(principale)).expect(400);
+  await http.put(paghe).set(auth(altra)).send(voci).expect(404);
+  await http.put(paghe).set(auth(principale)).send({ ...voci, contributiCents: -10 }).expect(400);
+  const prospetto = (await http.put(paghe).set(auth(principale)).send(voci).expect(200)).body;
+  expect(prospetto).toMatchObject({ ...voci, saldoCents: 208_500 });
+  expect(prospetto).not.toHaveProperty('aziendaId');
+  const aggiornato = (await http.put(paghe).set(auth(principale)).send({ ...voci, trattenuteCents: 0 }).expect(200)).body;
+  expect(aggiornato).toMatchObject({ id: prospetto.id, saldoCents: 210_000 });
+  await http.get(paghe + '?mese=2020-11').set(auth(principale)).expect(200, []);
+  await http.get(paghe + '?mese=2020-12').set(auth(altra)).expect(200, []);
+  await http.get(paghe + '?mese=2020-12').set(auth(principale)).expect(200, [aggiornato]);
+
+  const pdf = await http.get(paghe + '/' + prospetto.id + '/pdf').set(auth(principale)).expect(200);
+  expect(pdf.headers['cache-control']).toContain('no-store');
+  expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+  await http.get(paghe + '/' + prospetto.id + '/pdf').set(auth(altra)).expect(404);
+
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
   try {
@@ -65,6 +86,9 @@ it('gestisce il personale, valida le date e limita accesso e modifica al tenant 
     await db.end();
   }
   await http.get(endpoint).set(auth(principale)).expect(403);
+  await http.get(paghe + '?mese=2020-12').set(auth(principale)).expect(403);
+  await http.put(paghe).set(auth(principale)).send(voci).expect(403);
+  await http.get(paghe + '/' + prospetto.id + '/pdf').set(auth(principale)).expect(403);
   await http.post(endpoint).set(auth(principale)).send(bozza).expect(403);
   await http.put(endpoint + '/' + ingresso.id).set(auth(principale)).send(bozza).expect(403);
 });

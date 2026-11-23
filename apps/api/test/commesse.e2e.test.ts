@@ -105,6 +105,29 @@ it('collega fatture, distingue incassi e storni e registra i costi della commess
   await http.delete(costi + '/' + lavoro.id).set(a).expect(204);
   expect((await http.get(costi).set(a).expect(200)).body).toMatchObject([spesa]);
 
+  const orario = { tipo: 'lavoro', operatore: 'Ada', data: '2026-02-03', descrizione: 'Verifica', minuti: 90, tariffaOrariaCents: 4001 };
+  await http.post(costi).set(a).send({ ...orario, costoCents: 20 }).expect(400);
+  const tempo = (await http.post(costi).set(a).send(orario).expect(201)).body;
+  expect((await http.get(costi).set(a).expect(200)).body).toContainEqual(
+    expect.objectContaining({ id: tempo.id, ...orario, costoCents: 6002 }),
+  );
+
+  const contratti = '/api/commesse/' + commessa + '/contratti';
+  const bozza = { titolo: 'Accordo di progetto', data: '2026-02-03', testo: 'Consegna del progetto secondo la proposta concordata.' };
+  const creata = (await http.post(contratti).set(a).send(bozza).expect(201)).body;
+  expect((await http.get(contratti).set(a).expect(200)).body)
+    .toEqual([{ id: creata.id, titolo: bozza.titolo, data: bozza.data }]);
+  await http.get(contratti).set(b).expect(404);
+  const url = contratti + '/' + creata.id;
+  await http.get('/api/commesse/' + altraCommessa + '/contratti/' + creata.id).set(a).expect(404);
+  await http.put(url).set(b).send(bozza).expect(404);
+  const nuova = { ...bozza, testo: 'Condizioni concordate per il nuovo periodo.' };
+  expect((await http.put(url).set(a).send(nuova).expect(200)).body).toMatchObject(nuova);
+  await http.get(url + '/pdf').set(b).expect(404);
+  const pdf = await http.get(url + '/pdf').set(a).expect(200);
+  expect(pdf.headers['content-type']).toBe('application/pdf');
+  expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+
   await collega(commessa, false).expect(204);
   expect((await http.get(rotta).set(a).expect(200)).body.collegate).toEqual([]);
 });

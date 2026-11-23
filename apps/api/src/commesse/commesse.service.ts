@@ -8,6 +8,7 @@ const datiCommessa = {
   id: commesse.id,
   nome: commesse.nome,
   budgetCents: commesse.budgetCents,
+  ricavoNettoCents: commesse.ricavoNettoCents,
   stato: commesse.stato,
   scadenza: commesse.scadenza,
   cliente: { id: controparti.id, denominazione: controparti.denominazione },
@@ -39,8 +40,8 @@ export class CommesseService {
     if (!cliente) throw new NotFoundException('Cliente non trovato');
 
     const [commessa] = await tx.insert(commesse).values({ aziendaId, ...input }).returning();
-    const { id, nome, budgetCents, stato, scadenza } = commessa!;
-    return { id, nome, budgetCents, stato, scadenza, cliente };
+    const { id, nome, budgetCents, ricavoNettoCents, stato, scadenza } = commessa!;
+    return { id, nome, budgetCents, ricavoNettoCents, stato, scadenza, cliente };
   }
 
   aggiorna(aziendaId: string, id: string, input: AggiornaCommessaInput): Promise<void> {
@@ -113,6 +114,8 @@ export class CommesseService {
         descrizione: costiCommessa.descrizione,
         minuti: costiCommessa.minuti,
         costoCents: costiCommessa.costoCents,
+        tariffaOrariaCents: costiCommessa.tariffaOrariaCents,
+        operatore: costiCommessa.operatore,
       }).from(costiCommessa)
         .where(eq(costiCommessa.commessaId, commessaId))
         .orderBy(desc(costiCommessa.data), asc(costiCommessa.id));
@@ -124,8 +127,12 @@ export class CommesseService {
       const commessa = await tx.query.commesse.findFirst({ where: eq(commesse.id, commessaId) });
       if (!commessa) throw new NotFoundException('Commessa non trovata');
 
+      const costoCents = input.tipo === 'lavoro' && input.tariffaOrariaCents !== undefined
+        ? Math.round(input.minuti * input.tariffaOrariaCents / 60)
+        : input.costoCents;
+      if (costoCents === undefined) throw new BadRequestException('Indica il costo della voce');
       const [costo] = await tx.insert(costiCommessa)
-        .values({ ...input, aziendaId, commessaId })
+        .values({ ...input, costoCents, aziendaId, commessaId })
         .returning({ id: costiCommessa.id });
       return costo!;
     });

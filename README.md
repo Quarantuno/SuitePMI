@@ -15,8 +15,8 @@ budget, ore e spese per ogni commessa.
 | **Solleciti** | Promemoria, solleciti e diffide con PDF, storico e invio via email o PEC. |
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
 | **Preventivi** | Bozze, voci e IVA, esportazione PDF e conversione in commessa. |
-| **Commesse** | Budget, stato, scadenza, fatture collegate e registrazione di ore e spese. |
-| **Personale** | Anagrafica, mansioni, email di lavoro, ingressi e uscite, ferie e permessi. |
+| **Commesse** | Budget, fatture collegate, rendiconto ore e spese, margine e bozze di contratto. |
+| **Personale** | Anagrafica, ingressi e uscite, ferie e permessi, preparazione paghe. |
 
 ## Avvio rapido
 
@@ -169,7 +169,17 @@ riducono il residuo e sono indicati separatamente dagli incassi.
 
 Nel dettaglio della commessa, **Ore e spese** registra data, descrizione e
 costo totale della voce. Per il lavoro si inserisce anche la durata in minuti.
-Il riepilogo mostra il tempo registrato e i costi di lavoro e spesa.
+Indica il costo totale della voce oppure il costo orario per ottenere il costo
+in base ai minuti registrati. Il CSV esporta il periodo selezionato.
+
+Il margine sui costi registrati è il ricavo previsto al netto IVA meno lavoro
+e spese registrate. I totali del margine si riferiscono a tutta la commessa.
+Per le commesse nate da un preventivo, il ricavo iniziale è l’imponibile
+dell’offerta. Per le altre, inseriscilo in **Modifica commessa**.
+
+Da **Contratti** nel dettaglio della commessa puoi salvare e modificare più
+bozze con il tuo testo. Il PDF riporta azienda, cliente, commessa e la dicitura
+**Bozza di contratto**.
 
 ### Personale
 
@@ -181,6 +191,13 @@ risulta attiva fino all’ultimo giorno di lavoro compreso.
 Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera e
 consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
 per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
+
+Da **Personale → Preparazione paghe**, un titolare o un amministratore può
+registrare un prospetto mensile per persona, scaricare il PDF interno ed esportare il mese in CSV.
+Il saldo somma lordo e altre competenze e sottrae contributi, ritenute e
+trattenute già quantificati e inseriti a mano. Il prospetto è per uso interno.
+Il calcolo contributivo e fiscale e la produzione dei cedolini ufficiali
+richiedono un motore paghe o un’integrazione dedicata.
 
 ## Sviluppo
 

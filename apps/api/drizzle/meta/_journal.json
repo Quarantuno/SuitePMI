@@ -99,6 +99,13 @@
       "when": 1795440743804,
       "tag": "0013_preventivi",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795441329075,
+      "tag": "0014_rendiconti_contratti_paghe",
+      "breakpoints": true
     }
   ]
 }

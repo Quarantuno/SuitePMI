@@ -70,6 +70,6 @@ it('salva una bozza, esporta il PDF e converte l’accettazione in una sola comm
   expect(seconda.body.commessaId).toBe(prima.body.commessaId);
   await http.patch(url + '/stato').set(a).send({ stato: 'rifiutato' }).expect(409);
   expect((await http.get('/api/commesse').set(a).expect(200)).body).toMatchObject([
-    { id: prima.body.commessaId, nome: modifica.titolo, budgetCents: 25_508, cliente: { id: cliente } },
+    { id: prima.body.commessaId, nome: modifica.titolo, budgetCents: 25_508, ricavoNettoCents: 21_007, cliente: { id: cliente } },
   ]);
 });

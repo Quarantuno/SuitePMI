@@ -35,6 +35,9 @@ export function Commesse() {
         clienteId: String(form.get('clienteId') ?? ''),
         nome: String(form.get('nome') ?? ''),
         budgetCents: parseEuroToCents(String(form.get('budget') ?? '')),
+        ricavoNettoCents: String(form.get('ricavo') ?? '').trim()
+          ? parseEuroToCents(String(form.get('ricavo')))
+          : null,
         scadenza: String(form.get('scadenza') ?? '') || null,
       };
       return api<Commessa>('/commesse', { body });
@@ -67,6 +70,7 @@ export function Commesse() {
               {opzioni.map((cliente) => <option key={cliente.id} value={cliente.id}>{cliente.denominazione}</option>)}
             </Select>
             <Field label="Budget lordo (€)" name="budget" inputMode="decimal" required />
+            <Field label="Ricavo previsto al netto IVA (€)" name="ricavo" inputMode="decimal" />
             <Field label="Scadenza" name="scadenza" type="date" />
             <Button disabled={crea.isPending}>{crea.isPending ? 'Creazione…' : 'Crea commessa'}</Button>
           </form>
@@ -145,7 +149,9 @@ export function CommessaDettaglio() {
         etichetteStato[commessa.stato],
         commessa.scadenza && 'Scadenza ' + formatData(commessa.scadenza),
         inRitardo(commessa, todayIso()) && 'In ritardo',
-      ].filter(Boolean).join(' · ')} actions={<Link to="/commesse">Tutte le commesse</Link>} />
+      ].filter(Boolean).join(' · ')} actions={
+        <><Link to={'/commesse/' + commessa.id + '/contratti'}>Contratti</Link><Link to="/commesse">Tutte le commesse</Link></>
+      } />
       <ModificaCommessa key={commessa.id} commessa={commessa} />
       <ErrorBox error={documenti.error ?? collega.error} />
       {documenti.isPending && <p>Caricamento fatture…</p>}
@@ -192,7 +198,7 @@ export function CommessaDettaglio() {
           </section>
         </>
       )}
-      <CostiCommessa key={commessa.id} commessaId={commessa.id} />
+      <CostiCommessa key={commessa.id} commessaId={commessa.id} ricavoNettoCents={commessa.ricavoNettoCents} />
     </>
   );
 }
@@ -207,6 +213,9 @@ function ModificaCommessa({ commessa }: { commessa: Commessa }) {
         nome: String(form.get('nome') ?? ''),
         budgetCents: parseEuroToCents(String(form.get('budget') ?? '')),
         stato: statiCommessa.find((stato) => stato === form.get('stato')),
+        ricavoNettoCents: String(form.get('ricavo') ?? '').trim()
+          ? parseEuroToCents(String(form.get('ricavo')))
+          : null,
         scadenza: String(form.get('scadenza') ?? '') || null,
       };
       return api<void>('/commesse/' + commessa.id, { method: 'PATCH', body });
@@ -236,6 +245,8 @@ function ModificaCommessa({ commessa }: { commessa: Commessa }) {
         <Select label="Stato" name="stato" defaultValue={commessa.stato}>
           {statiCommessa.map((stato) => <option key={stato} value={stato}>{etichetteStato[stato]}</option>)}
         </Select>
+        <Field label="Ricavo previsto al netto IVA (€)" name="ricavo" inputMode="decimal"
+          defaultValue={commessa.ricavoNettoCents === null ? '' : (commessa.ricavoNettoCents / 100).toFixed(2).replace('.', ',')} />
         <Field label="Scadenza" name="scadenza" type="date" defaultValue={commessa.scadenza ?? ''} />
         <Button disabled={salva.isPending}>Salva</Button>
         <Button variant="ghost" type="button" disabled={salva.isPending} onClick={() => {

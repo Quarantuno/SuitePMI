@@ -66,6 +66,7 @@ export class PreventiviService {
           clienteId: attuale.clienteId,
           nome: attuale.titolo,
           budgetCents: attuale.totaleCents,
+          ricavoNettoCents: totaliPreventivo(attuale.voci).imponibileCents,
         });
         commessaId = commessa.id;
       }

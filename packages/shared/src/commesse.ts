@@ -8,6 +8,7 @@ export const commessaSchema = z.object({
   clienteId: z.uuid(),
   nome: z.string().trim().min(1).max(160),
   budgetCents: z.number().int().min(0).max(100_000_000_000),
+  ricavoNettoCents: z.number().int().min(0).max(100_000_000_000).nullable().optional(),
   stato: z.enum(statiCommessa).optional(),
   scadenza: isoDate.nullable().optional(),
 });
@@ -25,6 +26,7 @@ export interface Commessa {
   nome: string;
   cliente: { id: string; denominazione: string };
   budgetCents: number;
+  ricavoNettoCents: number | null;
   stato: StatoCommessa;
   scadenza: string | null;
 }
@@ -49,14 +51,18 @@ export const costoCommessaSchema = z.discriminatedUnion('tipo', [
     ...datiCosto,
     tipo: z.literal('lavoro'),
     minuti: z.number().int().min(1).max(1440),
-    costoCents: z.number().int().min(0).max(100_000_000_000),
+    costoCents: z.number().int().min(0).max(100_000_000_000).optional(),
+    tariffaOrariaCents: z.number().int().min(0).max(100_000_000).optional(),
+    operatore: z.string().trim().min(1).max(100).optional(),
   }),
   z.object({
     ...datiCosto,
     tipo: z.literal('spesa'),
     costoCents: z.number().int().min(1).max(100_000_000_000),
   }),
-]);
+]).refine((voce) => voce.tipo === 'spesa' || (voce.costoCents === undefined) !== (voce.tariffaOrariaCents === undefined), {
+  path: ['costoCents'], message: 'Indica il costo totale oppure il costo orario',
+});
 
 export type CostoCommessaInput = z.infer<typeof costoCommessaSchema>;
 
@@ -67,4 +73,6 @@ export interface CostoCommessa {
   descrizione: string;
   minuti: number;
   costoCents: number;
+  tariffaOrariaCents: number | null;
+  operatore: string | null;
 }

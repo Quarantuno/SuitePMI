@@ -113,6 +113,22 @@ export const assenze = pgTable(
   ],
 );
 
+export const prospettiPaghe = pgTable(
+  'prospetti_paghe',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    personaId: uuid('persona_id').notNull().references(() => personale.id, { onDelete: 'restrict' }),
+    mese: text('mese').notNull(),
+    lordoCents: cents('lordo_cents').notNull(),
+    competenzeCents: cents('competenze_cents').notNull(),
+    contributiCents: cents('contributi_cents').notNull(),
+    ritenuteCents: cents('ritenute_cents').notNull(),
+    trattenuteCents: cents('trattenute_cents').notNull(),
+  },
+  (t) => [uniqueIndex('prospetti_paghe_mese_persona_idx').on(t.aziendaId, t.mese, t.personaId)],
+);
+
 export const controparti = pgTable(
   'controparti',
   {
@@ -148,10 +164,24 @@ export const commesse = pgTable(
     clienteId: uuid('cliente_id').notNull().references(() => controparti.id, { onDelete: 'restrict' }),
     nome: text('nome').notNull(),
     budgetCents: cents('budget_cents').notNull(),
+    ricavoNettoCents: cents('ricavo_netto_cents'),
     stato: text('stato', { enum: statiCommessa }).notNull().default('da_avviare'),
     scadenza: date('scadenza', { mode: 'string' }),
   },
   (t) => [index('commesse_azienda_idx').on(t.aziendaId)],
+);
+
+export const contratti = pgTable(
+  'contratti',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    commessaId: uuid('commessa_id').notNull().references(() => commesse.id, { onDelete: 'restrict' }),
+    titolo: text('titolo').notNull(),
+    data: date('data', { mode: 'string' }).notNull(),
+    testo: text('testo').notNull(),
+  },
+  (t) => [index('contratti_azienda_commessa_idx').on(t.aziendaId, t.commessaId)],
 );
 
 export const preventivi = pgTable(
@@ -186,6 +216,8 @@ export const costiCommessa = pgTable(
     data: date('data', { mode: 'string' }).notNull(),
     descrizione: text('descrizione').notNull(),
     minuti: integer('minuti').notNull().default(0),
+    tariffaOrariaCents: cents('tariffa_oraria_cents'),
+    operatore: text('operatore'),
     costoCents: cents('costo_cents').notNull(),
   },
   (t) => [index('costi_commessa_azienda_commessa_idx').on(t.aziendaId, t.commessaId)],
