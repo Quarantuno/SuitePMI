@@ -113,6 +113,25 @@ export const assenze = pgTable(
   ],
 );
 
+export const presenze = pgTable(
+  'presenze',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    personaId: uuid('persona_id').notNull().references(() => personale.id, { onDelete: 'cascade' }),
+    giorno: date('giorno', { mode: 'string' }).notNull(),
+    minutiOrdinari: integer('minuti_ordinari').notNull(),
+    minutiStraordinari: integer('minuti_straordinari').notNull(),
+  },
+  (t) => [
+    uniqueIndex('presenze_azienda_giorno_persona_idx').on(t.aziendaId, t.giorno, t.personaId),
+    index('presenze_persona_idx').on(t.personaId),
+    check('presenze_minuti_validi', sql`${t.minutiOrdinari} BETWEEN 0 AND 1440
+      AND ${t.minutiStraordinari} BETWEEN 0 AND 1440
+      AND ${t.minutiOrdinari} + ${t.minutiStraordinari} BETWEEN 1 AND 1440`),
+  ],
+);
+
 export const prospettiPaghe = pgTable(
   'prospetti_paghe',
   {

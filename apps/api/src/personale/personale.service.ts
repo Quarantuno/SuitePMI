@@ -1,10 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type StatoPersona } from '@suite/shared';
+import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type StatoPersona } from '@suite/shared';
 import { and, asc, eq, gt, gte, inArray, lt, lte, or } from 'drizzle-orm';
 import type { SessionUser } from '../common/auth';
 import { generaProspettoPaghePdf } from './prospetto-paghe.pdf';
 import { DbService, type Tx } from '../db/db.service';
-import { assenze, aziende, membri, personale, prospettiPaghe } from '../db/schema';
+import { assenze, aziende, membri, personale, presenze, prospettiPaghe } from '../db/schema';
 
 const campiPersona = {
   id: personale.id,
@@ -23,6 +23,13 @@ function conStato(persona: Omit<Persona, 'stato'>, oggi: string): Persona {
   if (persona.dataIngresso > oggi) stato = 'in_arrivo';
   if (persona.dataUscita && persona.dataUscita < oggi) stato = 'cessato';
   return { ...persona, stato };
+}
+
+function limitiMese(mese: string) {
+  const [anno, numeroMese] = mese.split('-').map(Number);
+  const inizio = mese + '-01';
+  const ultimoGiorno = new Date(Date.UTC(anno!, numeroMese!, 0)).getUTCDate();
+  return { inizio, fine: addDays(inizio, ultimoGiorno - 1) };
 }
 
 @Injectable()
@@ -56,6 +63,12 @@ export class PersonaleService {
       )).limit(1);
       if (incompatibile) throw new ConflictException('Le date lasciano fuori un’assenza già registrata');
 
+      const [presenzaFuoriPeriodo] = await tx.select({ id: presenze.id }).from(presenze).where(and(
+        eq(presenze.personaId, id),
+        or(lt(presenze.giorno, input.dataIngresso), input.dataUscita ? gt(presenze.giorno, input.dataUscita) : undefined),
+      )).limit(1);
+      if (presenzaFuoriPeriodo) throw new ConflictException('Le date lasciano fuori una presenza già registrata');
+
       const [persona] = await tx.update(personale).set(input)
         .where(eq(personale.id, id)).returning(campiPersona);
       if (!persona) throw new NotFoundException('Persona non trovata');
@@ -64,10 +77,7 @@ export class PersonaleService {
   }
 
   calendario(user: SessionUser, mese: string): Promise<Assenza[]> {
-    const [anno, numeroMese] = mese.split('-').map(Number);
-    const inizio = mese + '-01';
-    const ultimoGiorno = new Date(Date.UTC(anno!, numeroMese!, 0)).getUTCDate();
-    const fine = addDays(inizio, ultimoGiorno - 1);
+    const { inizio, fine } = limitiMese(mese);
     return this.perTitolari(user, (tx) => tx.select({
       id: assenze.id,
       personaId: assenze.personaId,
@@ -94,6 +104,13 @@ export class PersonaleService {
       )).limit(1);
       if (sovrapposta) throw new ConflictException('La persona ha già un’assenza in questo periodo');
 
+      const [presenza] = await tx.select({ id: presenze.id }).from(presenze).where(and(
+        eq(presenze.personaId, input.personaId),
+        gte(presenze.giorno, input.dal),
+        lte(presenze.giorno, input.al),
+      )).limit(1);
+      if (presenza) throw new ConflictException('La persona ha già una presenza in questo periodo');
+
       const [creata] = await tx.insert(assenze).values({ ...input, aziendaId: user.aziendaId })
         .returning({ id: assenze.id });
       return { ...input, id: creata!.id, persona: { nome: persona.nome, cognome: persona.cognome } };
@@ -104,6 +121,57 @@ export class PersonaleService {
     return this.perTitolari(user, async (tx) => {
       const [rimossa] = await tx.delete(assenze).where(eq(assenze.id, id)).returning({ id: assenze.id });
       if (!rimossa) throw new NotFoundException('Assenza non trovata');
+    });
+  }
+
+  registroPresenze(user: SessionUser, mese: string): Promise<Presenza[]> {
+    const { inizio, fine } = limitiMese(mese);
+    return this.perTitolari(user, (tx) => tx.select({
+      id: presenze.id,
+      personaId: presenze.personaId,
+      giorno: presenze.giorno,
+      minutiOrdinari: presenze.minutiOrdinari,
+      minutiStraordinari: presenze.minutiStraordinari,
+      persona: { nome: personale.nome, cognome: personale.cognome },
+    }).from(presenze)
+      .innerJoin(personale, eq(presenze.personaId, personale.id))
+      .where(and(gte(presenze.giorno, inizio), lte(presenze.giorno, fine)))
+      .orderBy(asc(presenze.giorno), asc(personale.cognome), asc(personale.nome), asc(presenze.id)));
+  }
+
+  salvaPresenza(user: SessionUser, input: PresenzaInput, id?: string): Promise<Presenza> {
+    return this.perTitolari(user, async (tx) => {
+      const { personaId, giorno, ...durata } = input;
+      const persona = await this.bloccaPersona(tx, personaId);
+      if (giorno < persona.dataIngresso || (persona.dataUscita && giorno > persona.dataUscita)) {
+        throw new BadRequestException('La presenza deve rientrare nelle date di ingresso e uscita');
+      }
+
+      const [assenza] = await tx.select({ id: assenze.id }).from(assenze).where(and(
+        eq(assenze.personaId, personaId), lte(assenze.dal, giorno), gte(assenze.al, giorno),
+      )).limit(1);
+      if (assenza) throw new ConflictException('La persona ha già un’assenza per questa giornata');
+
+      const [salvata] = id
+        ? await tx.update(presenze).set(durata).where(and(
+          eq(presenze.id, id), eq(presenze.personaId, personaId), eq(presenze.giorno, giorno),
+        )).returning({ id: presenze.id })
+        : await tx.insert(presenze).values({ ...input, aziendaId: user.aziendaId })
+          .onConflictDoNothing({ target: [presenze.aziendaId, presenze.giorno, presenze.personaId] })
+          .returning({ id: presenze.id });
+      if (!salvata) {
+        if (id) throw new NotFoundException('Presenza non trovata per la persona e la data indicate');
+        throw new ConflictException('La persona ha già una presenza per questa giornata. Modificala dal registro.');
+      }
+
+      return { ...input, id: salvata.id, persona: { nome: persona.nome, cognome: persona.cognome } };
+    });
+  }
+
+  rimuoviPresenza(user: SessionUser, id: string): Promise<void> {
+    return this.perTitolari(user, async (tx) => {
+      const [rimossa] = await tx.delete(presenze).where(eq(presenze.id, id)).returning({ id: presenze.id });
+      if (!rimossa) throw new NotFoundException('Presenza non trovata');
     });
   }
 

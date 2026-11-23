@@ -7,6 +7,7 @@ import { Assenze } from './pages/Assenze';
 import { ModificaPreventivo, Preventivi, PreventivoDettaglio } from './pages/Preventivi';
 import { ContrattiCommessa } from './pages/ContrattiCommessa';
 import { Paghe } from './pages/Paghe';
+import { Presenze } from './pages/Presenze';
 import { Personale } from './pages/Personale';
 import { Commesse, CommessaDettaglio } from './pages/Commesse';
 import { Crediti } from './pages/Crediti';
@@ -127,6 +128,7 @@ export function App() {
         <Route path="preventivi/:id" element={<PreventivoDettaglio />} />
         <Route path="preventivi/:id/modifica" element={<ModificaPreventivo />} />
         <Route path="personale" element={<Personale />} />
+        <Route path="personale/presenze" element={<Presenze />} />
         <Route path="personale/paghe" element={<Paghe />} />
         <Route path="personale/assenze" element={<Assenze />} />
         <Route path="commesse" element={<Commesse />} />

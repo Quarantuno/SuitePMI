@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, StreamableFile } from '@nestjs/common';
-import { assenzaSchema, calendarioAssenzeSchema, pagheMeseSchema, personaSchema, prospettoPagheSchema, type AssenzaInput, type PersonaInput, type ProspettoPagheInput } from '@suite/shared';
+import { assenzaSchema, calendarioAssenzeSchema, mesePersonaleSchema, pagheMeseSchema, personaSchema, presenzaSchema, prospettoPagheSchema, type AssenzaInput, type PersonaInput, type PresenzaInput, type ProspettoPagheInput } from '@suite/shared';
 import { CurrentUser, type SessionUser } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
 import { PersonaleService } from './personale.service';
@@ -35,6 +35,34 @@ export class PersonaleController {
   @HttpCode(204)
   rimuoviAssenza(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.service.rimuoviAssenza(user, id);
+  }
+
+  @Get('presenze')
+  @Header('Cache-Control', 'private, no-store')
+  registroPresenze(@CurrentUser() user: SessionUser, @Query(new ZodPipe(mesePersonaleSchema)) query: { mese: string }) {
+    return this.service.registroPresenze(user, query.mese);
+  }
+
+  @Post('presenze')
+  @Header('Cache-Control', 'private, no-store')
+  registraPresenza(@CurrentUser() user: SessionUser, @Body(new ZodPipe(presenzaSchema)) input: PresenzaInput) {
+    return this.service.salvaPresenza(user, input);
+  }
+
+  @Put('presenze/:id')
+  @Header('Cache-Control', 'private, no-store')
+  aggiornaPresenza(
+    @CurrentUser() user: SessionUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(presenzaSchema)) input: PresenzaInput,
+  ) {
+    return this.service.salvaPresenza(user, input, id);
+  }
+
+  @Delete('presenze/:id')
+  @HttpCode(204)
+  rimuoviPresenza(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.rimuoviPresenza(user, id);
   }
 
   @Get('paghe')

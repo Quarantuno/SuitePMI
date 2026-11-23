@@ -22,17 +22,18 @@ afterAll(async () => {
   await app?.close();
 });
 
-it('gestisce il personale, valida le date e limita accesso e modifica al tenant autorizzato', async () => {
-  async function registra(nome: string): Promise<AuthResponse> {
-    const res = await http.post('/api/auth/register').send({
-      email: nome + '@test.it', password: 'password-sicura-1', nome, ragioneSociale: nome, partitaIva: '12345678903',
-    }).expect(201);
-    return res.body;
-  }
+async function registra(nome: string): Promise<AuthResponse> {
+  const res = await http.post('/api/auth/register').send({
+    email: nome + '@test.it', password: 'password-sicura-1', nome, ragioneSociale: nome, partitaIva: '12345678903',
+  }).expect(201);
+  return res.body;
+}
 
+const auth = (sessione: AuthResponse) => ({ Authorization: 'Bearer ' + sessione.token });
+
+it('gestisce il personale, valida le date e limita accesso e modifica al tenant autorizzato', async () => {
   const principale = await registra('personale');
   const altra = await registra('personale-altra');
-  const auth = (sessione: AuthResponse) => ({ Authorization: 'Bearer ' + sessione.token });
   const endpoint = '/api/personale';
   const bozza: PersonaInput = {
     nome: 'Anna', cognome: 'Verdi', mansione: 'Responsabile progetti',
@@ -87,8 +88,59 @@ it('gestisce il personale, valida le date e limita accesso e modifica al tenant 
   }
   await http.get(endpoint).set(auth(principale)).expect(403);
   await http.get(paghe + '?mese=2020-12').set(auth(principale)).expect(403);
+  await http.get(endpoint + '/presenze?mese=2020-12').set(auth(principale)).expect(403);
   await http.put(paghe).set(auth(principale)).send(voci).expect(403);
   await http.get(paghe + '/' + prospetto.id + '/pdf').set(auth(principale)).expect(403);
   await http.post(endpoint).set(auth(principale)).send(bozza).expect(403);
   await http.put(endpoint + '/' + ingresso.id).set(auth(principale)).send(bozza).expect(403);
+});
+
+it('registra e corregge ore giornaliere, protegge assenze e date di lavoro e isola le aziende', async () => {
+  const titolare = auth(await registra('presenze'));
+  const altra = auth(await registra('presenze-altra'));
+  const endpoint = '/api/personale/presenze';
+  const scheda: PersonaInput = {
+    nome: 'Luca', cognome: 'Verdi', mansione: 'Responsabile progetti', emailLavoro: null,
+    dataIngresso: '2028-02-01', dataUscita: '2028-03-01',
+  };
+  const { id: personaId } = (await http.post('/api/personale').set(titolare).send(scheda).expect(201)).body;
+  const presenza = { personaId, giorno: '2028-02-29', minutiOrdinari: 480, minutiStraordinari: 45 };
+
+  await http.get(endpoint + '?mese=2028-02').expect(401);
+  await http.get(endpoint + '?mese=2028-13').set(titolare).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...presenza, giorno: '2027-02-29' }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...presenza, giorno: '2028-01-31' }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...presenza, giorno: '2028-03-02' }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...presenza, minutiOrdinari: 0, minutiStraordinari: 0 }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...presenza, minutiOrdinari: 1400 }).expect(400);
+  await http.post(endpoint).set(altra).send(presenza).expect(404);
+
+  const contemporanee = await Promise.all([
+    http.post(endpoint).set(titolare).send(presenza),
+    http.post(endpoint).set(titolare).send(presenza),
+  ]);
+  expect(contemporanee.map((risposta) => risposta.status).sort()).toEqual([201, 409]);
+  const creata = contemporanee.find((risposta) => risposta.status === 201)!.body;
+  expect(creata).toMatchObject({ ...presenza, persona: { nome: 'Luca', cognome: 'Verdi' } });
+  expect(creata).not.toHaveProperty('aziendaId');
+
+  const durataCorretta = { ...presenza, minutiStraordinari: 60 };
+  await http.put(endpoint + '/' + creata.id).set(altra).send(durataCorretta).expect(404);
+  await http.put(endpoint + '/' + creata.id).set(titolare).send({ ...durataCorretta, giorno: '2028-03-01' }).expect(404);
+  const corretta = (await http.put(endpoint + '/' + creata.id).set(titolare).send(durataCorretta).expect(200)).body;
+  expect(corretta).toEqual({ ...creata, ...durataCorretta });
+  await http.post(endpoint).set(titolare).send({ ...presenza, giorno: '2028-03-01' }).expect(201);
+  await http.get(endpoint + '?mese=2028-02').set(titolare).expect(200, [corretta])
+    .expect('Cache-Control', 'private, no-store');
+  await http.get(endpoint + '?mese=2028-02').set(altra).expect(200, []);
+
+  const assenza = { personaId, tipo: 'ferie', dal: '2028-02-28', al: '2028-02-29' };
+  await http.post('/api/personale/assenze').set(titolare).send(assenza).expect(409);
+  await http.post('/api/personale/assenze').set(titolare).send({ ...assenza, al: assenza.dal }).expect(201);
+  await http.post(endpoint).set(titolare).send({ ...presenza, giorno: assenza.dal }).expect(409);
+  await http.put('/api/personale/' + personaId).set(titolare).send({ ...scheda, dataUscita: '2028-02-28' }).expect(409);
+
+  await http.delete(endpoint + '/' + creata.id).set(altra).expect(404);
+  await http.delete(endpoint + '/' + creata.id).set(titolare).expect(204);
+  await http.get(endpoint + '?mese=2028-02').set(titolare).expect(200, []);
 });

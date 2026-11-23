@@ -106,6 +106,13 @@
       "when": 1795441329075,
       "tag": "0014_rendiconti_contratti_paghe",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795443010632,
+      "tag": "0015_presenze",
+      "breakpoints": true
     }
   ]
 }

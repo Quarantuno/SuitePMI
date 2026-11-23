@@ -16,7 +16,7 @@ budget, ore e spese per ogni commessa.
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
 | **Preventivi** | Bozze, voci e IVA, esportazione PDF e conversione in commessa. |
 | **Commesse** | Budget, fatture collegate, rendiconto ore e spese, margine e bozze di contratto. |
-| **Personale** | Anagrafica, ingressi e uscite, ferie e permessi, preparazione paghe. |
+| **Personale** | Anagrafica, ingressi e uscite, ferie e permessi, registro presenze, preparazione paghe. |
 
 ## Avvio rapido
 
@@ -192,8 +192,14 @@ Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera 
 consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
 per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
 
+Da **Personale → Registro presenze** puoi registrare ore ordinarie e
+straordinarie per persona e giorno, correggere le registrazioni e consultare
+i totali mensili. Il registro rifiuta le giornate già coperte da ferie o
+permessi a giornata intera. Le ore di commessa restano nel rendiconto progetti.
+
 Da **Personale → Preparazione paghe**, un titolare o un amministratore può
 registrare un prospetto mensile per persona, scaricare il PDF interno ed esportare il mese in CSV.
+I totali del registro presenze appaiono a video e nel CSV del mese.
 Il saldo somma lordo e altre competenze e sottrae contributi, ritenute e
 trattenute già quantificati e inseriti a mano. Il prospetto è per uso interno.
 Il calcolo contributivo e fiscale e la produzione dei cedolini ufficiali

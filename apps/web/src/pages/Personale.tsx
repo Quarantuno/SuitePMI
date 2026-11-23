@@ -28,6 +28,7 @@ export function Personale() {
       <PageHeader title="Personale" actions={organico.isSuccess && (
         <>
           <Link to="/personale/assenze">Ferie e permessi</Link>
+          <Link to="/personale/presenze">Registro presenze</Link>
           <Link to="/personale/paghe">Preparazione paghe</Link>
           {!scheda && <Button onClick={() => setScheda('nuova')}>Aggiungi persona</Button>}
         </>
