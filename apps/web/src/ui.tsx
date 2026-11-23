@@ -77,6 +77,10 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
+export function Tabella({ children }: { children: ReactNode }) {
+  return <div className="table-wrap" tabIndex={0}><table>{children}</table></div>;
+}
+
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
     <header className="page-header">

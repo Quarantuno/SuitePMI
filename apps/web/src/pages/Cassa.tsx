@@ -3,7 +3,7 @@ import { formatData, formatEuro, parseEuroToCents, type PrevisioneCassaResponse 
 import { useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { GraficoCassa } from '../GraficoCassa';
-import { Button, Empty, ErrorBox, Money, PageHeader } from '../ui';
+import { Button, Empty, ErrorBox, Money, PageHeader, Tabella } from '../ui';
 
 function SaldoEditor({ saldo }: { saldo: PrevisioneCassaResponse['saldo'] }) {
   const qc = useQueryClient();
@@ -133,7 +133,7 @@ export function Cassa() {
               </button>
             </div>
             {tabella ? (
-              <table>
+              <Tabella>
                 <thead>
                   <tr>
                     <th>Settimana</th>
@@ -164,7 +164,7 @@ export function Cassa() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Tabella>
             ) : (
               <GraficoCassa settimane={d.settimane} />
             )}
@@ -184,7 +184,7 @@ export function Cassa() {
             {movimenti.length === 0 ? (
               <Empty title="Nessuna scadenza aperta in questo periodo" />
             ) : (
-              <table>
+              <Tabella>
                 <thead>
                   <tr>
                     <th>Scadenza</th>
@@ -210,7 +210,7 @@ export function Cassa() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Tabella>
             )}
           </section>
         </div>

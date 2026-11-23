@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Controparte } from '@suite/shared';
 import { useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { Button, Empty, ErrorBox, Field, fieldError, PageHeader, Select } from '../ui';
+import { Button, Empty, ErrorBox, Field, fieldError, PageHeader, Select, Tabella } from '../ui';
 
 const vuoto = { tipo: 'cliente', denominazione: '', partitaIva: '', email: '', pec: '', telefono: '' };
 
@@ -98,7 +98,7 @@ export function Clienti() {
         <ErrorBox error={q.error} />
         {q.data?.length === 0 && <Empty title={cerca ? 'Nessun risultato' : 'Ancora nessuna controparte'} />}
         {q.data && q.data.length > 0 && (
-          <table>
+          <Tabella>
             <thead>
               <tr>
                 <th>Denominazione</th>
@@ -138,7 +138,7 @@ export function Clienti() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Tabella>
         )}
       </section>
     </>

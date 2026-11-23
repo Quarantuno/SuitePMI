@@ -8,7 +8,7 @@ import {
 } from '@suite/shared';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { Button, Empty, ErrorBox, Money, PageHeader } from '../ui';
+import { Button, Empty, ErrorBox, Money, PageHeader, Tabella } from '../ui';
 
 const canale = { email: 'Email', pec: 'PEC', manuale: 'Fuori app' } as const;
 
@@ -30,7 +30,7 @@ export function Solleciti() {
           </Empty>
         )}
         {q.data && q.data.length > 0 && (
-          <table>
+          <Tabella>
             <thead>
               <tr>
                 <th>Data</th>
@@ -65,7 +65,7 @@ export function Solleciti() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Tabella>
         )}
       </section>
     </>
@@ -135,7 +135,7 @@ function PianoAutomatico() {
         </ul>
       )}
       {p.righe.length > 0 && (
-        <table>
+        <Tabella>
           <thead>
             <tr>
               <th>Cliente</th>
@@ -164,7 +164,7 @@ function PianoAutomatico() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Tabella>
       )}
     </section>
   );

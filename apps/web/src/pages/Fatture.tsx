@@ -13,7 +13,7 @@ import {
 import { useRef, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../api';
 import { leggiFile } from '../importFatture';
-import { Button, Empty, ErrorBox, Field, Money, PageHeader, Select } from '../ui';
+import { Button, Empty, ErrorBox, Field, Money, PageHeader, Select, Tabella } from '../ui';
 
 interface EsitoImport {
   file: string;
@@ -316,7 +316,7 @@ export function Fatture() {
         <ErrorBox error={q.error} />
         {q.data?.length === 0 && <Empty title="Nessuna fattura" />}
         {q.data && q.data.length > 0 && (
-          <table>
+          <Tabella>
             <thead>
               <tr>
                 <th>Numero</th>
@@ -387,7 +387,7 @@ export function Fatture() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Tabella>
         )}
       </section>
     </>

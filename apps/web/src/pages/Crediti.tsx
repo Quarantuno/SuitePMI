@@ -13,7 +13,7 @@ import {
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, salvaFile } from '../api';
-import { Button, Empty, ErrorBox, Money, PageHeader } from '../ui';
+import { Button, Empty, ErrorBox, Money, PageHeader, Tabella } from '../ui';
 
 function Kpi({ label, cents, note, accent }: { label: string; cents: number; note: string; accent?: boolean }) {
   return (
@@ -109,7 +109,7 @@ export function Crediti() {
 
           <section className="card">
             <h2>Per cliente</h2>
-            <table>
+            <Tabella>
               <thead>
                 <tr>
                   <th>Cliente</th>
@@ -157,12 +157,12 @@ export function Crediti() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Tabella>
           </section>
 
           <section className="card">
             <h2>Scadenze in ritardo</h2>
-            <table>
+            <Tabella>
               <thead>
                 <tr>
                   <th>Cliente</th>
@@ -218,7 +218,7 @@ export function Crediti() {
                   </Fragment>
                 ))}
               </tbody>
-            </table>
+            </Tabella>
             <p className="muted small footnote">
               Interessi semplici su base 365 giorni, dal giorno successivo alla scadenza, al tasso del semestre in cui
               matura ciascun giorno di ritardo. Il calcolo è indicativo: verifica sempre con il tuo consulente prima di
