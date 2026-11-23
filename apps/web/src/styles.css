@@ -391,3 +391,15 @@ input:disabled { color: var(--muted); background: var(--surface-2); }
 }
 .calendario-cella .badge { display: block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 680px) { .calendario-assenze { display: none; } }
+
+.voce-preventivo {
+  min-width: 0; margin: 1rem 0; border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px 12px;
+}
+.voce-preventivo legend { padding-inline: 4px; font-weight: 650; }
+.note-preventivo { margin-top: 1rem; }
+.note-preventivo textarea { min-height: 5em; }
+.totali-preventivo {
+  display: grid; grid-template-columns: auto auto; justify-content: end; gap: 4px 20px;
+}
+.totali-preventivo dd { margin: 0; text-align: right; }

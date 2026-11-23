@@ -11,3 +11,4 @@ export * from './tipi-documento';
 
 export * from './commesse';
 export * from './personale';
+export * from './preventivi';

@@ -4,6 +4,7 @@ import { useAuth } from './auth';
 import { Cassa } from './pages/Cassa';
 import { Clienti } from './pages/Clienti';
 import { Assenze } from './pages/Assenze';
+import { ModificaPreventivo, Preventivi, PreventivoDettaglio } from './pages/Preventivi';
 import { Personale } from './pages/Personale';
 import { Commesse, CommessaDettaglio } from './pages/Commesse';
 import { Crediti } from './pages/Crediti';
@@ -28,6 +29,7 @@ const sezioni = [
   {
     titolo: 'Operatività',
     voci: [
+      { to: '/preventivi', nome: 'Preventivi' },
       { to: '/commesse', nome: 'Commesse' },
       { to: '/personale', nome: 'Personale' },
       { to: '/clienti', nome: 'Clienti e fornitori' },
@@ -118,6 +120,10 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Crediti />} />
+        <Route path="preventivi" element={<Preventivi />} />
+        <Route path="preventivi/nuovo" element={<ModificaPreventivo />} />
+        <Route path="preventivi/:id" element={<PreventivoDettaglio />} />
+        <Route path="preventivi/:id/modifica" element={<ModificaPreventivo />} />
         <Route path="personale" element={<Personale />} />
         <Route path="personale/assenze" element={<Assenze />} />
         <Route path="commesse" element={<Commesse />} />

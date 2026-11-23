@@ -14,6 +14,7 @@ budget, ore e spese per ogni commessa.
 | **Fatture e incassi** | Import FatturaPA in XML, P7M e ZIP, scadenze, rate, incassi e note di credito. |
 | **Solleciti** | Promemoria, solleciti e diffide con PDF, storico e invio via email o PEC. |
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
+| **Preventivi** | Bozze, voci e IVA, esportazione PDF e conversione in commessa. |
 | **Commesse** | Budget, stato, scadenza, fatture collegate e registrazione di ore e spese. |
 | **Personale** | Anagrafica, mansioni, email di lavoro, ingressi e uscite, ferie e permessi. |
 
@@ -144,6 +145,13 @@ e lo proietta settimana per settimana usando le rate aperte di fatture emesse
 - i **crediti già scaduti** per prudenza non sono contati, salvo l'opzione
   "Conta i crediti già scaduti come incassati subito";
 - evidenzia il saldo minimo previsto e la prima settimana in cui si va sotto zero.
+
+### Preventivi
+
+Crea una bozza per un cliente esistente, aggiungi le voci con quantità, prezzo
+unitario e aliquota IVA e scarica il PDF. Dopo averlo inviato al cliente,
+registralo come inviato. Quando il cliente accetta, **Accetta e crea commessa**
+apre una commessa per lo stesso cliente, con il totale lordo come budget.
 
 ### Commesse
 
@@ -288,6 +296,10 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | GET | `/solleciti/automatici/piano` | Cosa partirebbe oggi con i solleciti automatici, e perché |
 | POST | `/solleciti/automatici/esegui` | Esegue subito il giro di oggi |
 | GET | `/cassa/previsione?settimane=13&includiCreditiScaduti=false` | Previsione di cassa e scadenzario |
+| GET/POST | `/preventivi` | Elenco e creazione dei preventivi |
+| GET/PUT | `/preventivi/:id` | Dettaglio e modifica della bozza |
+| GET | `/preventivi/:id/pdf` | Scarica il preventivo in PDF |
+| PATCH | `/preventivi/:id/stato` | Registra lo stato e crea la commessa all’accettazione |
 | GET/POST | `/commesse` | Elenco e creazione delle commesse |
 | PATCH | `/commesse/:id` | Modifica nome, budget, stato e scadenza |
 | GET | `/commesse/:id/fatture` | Fatture collegate e disponibili |

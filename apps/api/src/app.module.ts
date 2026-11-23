@@ -9,6 +9,7 @@ import { DbModule } from './db/db.module';
 import { FattureModule } from './fatture/fatture.module';
 import { IncassiModule } from './incassi/incassi.module';
 import { PersonaleModule } from './personale/personale.module';
+import { PreventiviModule } from './preventivi/preventivi.module';
 import { SollecitiModule } from './solleciti/solleciti.module';
 
 @Controller('health')
@@ -25,7 +26,7 @@ class HealthController {
  * vive nella sua cartella e dipende solo dal nucleo (db, auth) e da @suite/shared.
  */
 @Module({
-  imports: [DbModule, AuthModule, AziendaModule, ContropartiModule, FattureModule, IncassiModule, SollecitiModule, CassaModule, CommesseModule, PersonaleModule],
+  imports: [DbModule, AuthModule, AziendaModule, ContropartiModule, FattureModule, IncassiModule, SollecitiModule, CassaModule, CommesseModule, PersonaleModule, PreventiviModule],
   controllers: [HealthController],
 })
 export class AppModule {}

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AggiornaCommessaInput, Commessa, CommessaInput, CostoCommessa, CostoCommessaInput, FatturaCommessa } from '@suite/shared';
 import { and, asc, desc, eq, isNull, ne, notInArray, or } from 'drizzle-orm';
-import { DbService } from '../db/db.service';
+import { DbService, type Tx } from '../db/db.service';
 import { commesse, controparti, costiCommessa, fatture } from '../db/schema';
 
 const datiCommessa = {
@@ -28,17 +28,19 @@ export class CommesseService {
   }
 
   create(aziendaId: string, input: CommessaInput): Promise<Commessa> {
-    return this.db.withTenant(aziendaId, async (tx) => {
-      const cliente = await tx.query.controparti.findFirst({
-        columns: { id: true, denominazione: true },
-        where: and(eq(controparti.id, input.clienteId), ne(controparti.tipo, 'fornitore')),
-      });
-      if (!cliente) throw new NotFoundException('Cliente non trovato');
+    return this.db.withTenant(aziendaId, (tx) => this.creaInTransazione(tx, aziendaId, input));
+  }
 
-      const [commessa] = await tx.insert(commesse).values({ aziendaId, ...input }).returning();
-      const { id, nome, budgetCents, stato, scadenza } = commessa!;
-      return { id, nome, budgetCents, stato, scadenza, cliente };
+  async creaInTransazione(tx: Tx, aziendaId: string, input: CommessaInput): Promise<Commessa> {
+    const cliente = await tx.query.controparti.findFirst({
+      columns: { id: true, denominazione: true },
+      where: and(eq(controparti.id, input.clienteId), ne(controparti.tipo, 'fornitore')),
     });
+    if (!cliente) throw new NotFoundException('Cliente non trovato');
+
+    const [commessa] = await tx.insert(commesse).values({ aziendaId, ...input }).returning();
+    const { id, nome, budgetCents, stato, scadenza } = commessa!;
+    return { id, nome, budgetCents, stato, scadenza, cliente };
   }
 
   aggiorna(aziendaId: string, id: string, input: AggiornaCommessaInput): Promise<void> {

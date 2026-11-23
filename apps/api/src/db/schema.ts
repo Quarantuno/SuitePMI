@@ -1,4 +1,4 @@
-import { statiCommessa, tipiAssenza } from '@suite/shared';
+import { statiCommessa, statiPreventivo, tipiAssenza, type VocePreventivo } from '@suite/shared';
 import { relations, sql } from 'drizzle-orm';
 import {
   bigint,
@@ -152,6 +152,28 @@ export const commesse = pgTable(
     scadenza: date('scadenza', { mode: 'string' }),
   },
   (t) => [index('commesse_azienda_idx').on(t.aziendaId)],
+);
+
+export const preventivi = pgTable(
+  'preventivi',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    clienteId: uuid('cliente_id').notNull().references(() => controparti.id, { onDelete: 'restrict' }),
+    commessaId: uuid('commessa_id').references(() => commesse.id, { onDelete: 'restrict' }),
+    titolo: text('titolo').notNull(),
+    data: date('data', { mode: 'string' }).notNull(),
+    validoFino: date('valido_fino', { mode: 'string' }),
+    stato: text('stato', { enum: statiPreventivo }).notNull().default('bozza'),
+    totaleCents: cents('totale_cents').notNull(),
+    voci: jsonb('voci').$type<VocePreventivo[]>().notNull(),
+    note: text('note'),
+  },
+  (t) => [
+    index('preventivi_azienda_data_idx').on(t.aziendaId, t.data),
+    uniqueIndex('preventivi_commessa_idx').on(t.commessaId),
+    check('preventivi_validita_coerente', sql`${t.validoFino} >= ${t.data}`),
+  ],
 );
 
 export const costiCommessa = pgTable(

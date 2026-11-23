@@ -92,6 +92,13 @@
       "when": 1795359330226,
       "tag": "0012_assenze",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795440743804,
+      "tag": "0013_preventivi",
+      "breakpoints": true
     }
   ]
 }
