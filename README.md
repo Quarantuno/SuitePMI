@@ -1,11 +1,12 @@
 # SuitePMI
 
-**Il gestionale per PMI italiane che collega fatture, incassi, cassa e commesse.**
+**Il gestionale per PMI italiane che riunisce fatture, commesse e personale.**
 
-Importa le fatture elettroniche, segui i crediti dei clienti e controlla
-budget, ore e spese per ogni commessa.
+Importa le fatture elettroniche, segui incassi e cassa, trasforma i preventivi
+accettati in commesse e controlla la marginalità. Gestisci l’organico, registra
+presenze e assenze e prepara il riepilogo mensile per le paghe.
 
-[Avvio rapido](#avvio-rapido) · [Guida ai moduli](#guida-ai-moduli) · [Sviluppo](#sviluppo) · [API](#api) · [Sito di documentazione (sorgenti)](docs/)
+[Avvio rapido](#avvio-rapido) · [Guida ai moduli](#guida-ai-moduli) · [Sviluppo](#sviluppo) · [API](#api) · [Sito di documentazione](https://quarantuno.github.io/SuitePMI/)
 
 ## Cosa puoi fare
 
@@ -22,9 +23,14 @@ budget, ore e spese per ogni commessa.
 
 **Prerequisiti** — Node.js 22+, pnpm 10.28.0 e Docker con Compose.
 
+Avvia Docker Desktop o il servizio Docker. Per una prima installazione, clona
+il repository e lancia l’app.
+
 ```bash
-pnpm install
-cp .env.example .env
+git clone --branch main https://github.com/Quarantuno/SuitePMI.git
+cd SuitePMI
+pnpm install --frozen-lockfile
+[ -f .env ] || cp .env.example .env
 pnpm db:up          # avvia Postgres (porta 5432) e Mailpit (http://localhost:8025) in Docker
 pnpm db:migrate     # crea tabelle e policy di sicurezza
 pnpm dev            # API su :3000, web su http://localhost:5173
@@ -40,6 +46,22 @@ registrati con la partita IVA `12345678903` e importa la
 | Applicazione web | [localhost:5173](http://localhost:5173) |
 | API, endpoint di verifica | [localhost:3000/api/health](http://localhost:3000/api/health) |
 | Mailpit, posta di prova | [localhost:8025](http://localhost:8025) |
+
+### Aggiornare un’installazione locale
+
+Ferma l’app con `Ctrl+C`. Dalla radice del clone già esistente esegui questi comandi
+per aggiornare `main` e applicare le migrazioni al database locale.
+
+```bash
+git switch main
+git pull --ff-only origin main
+pnpm install --frozen-lockfile
+pnpm db:up
+pnpm db:migrate
+pnpm dev
+```
+
+Per fermare anche PostgreSQL e Mailpit, usa `pnpm db:down`.
 
 ## Guida ai moduli
 
@@ -192,21 +214,26 @@ Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera 
 consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
 per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
 
-Da **Personale → Registro presenze** puoi registrare ore ordinarie e
-straordinarie per persona e giorno, correggere le registrazioni e consultare
-i totali mensili. Il registro rifiuta le giornate già coperte da ferie o
-permessi a giornata intera. Le ore di commessa restano nel rendiconto progetti.
+Da **Personale → Registro presenze** puoi inserire i minuti ordinari e
+straordinari per persona e giorno, correggere le registrazioni e consultare i
+totali mensili. È ammessa una registrazione al giorno per persona durante il
+periodo di lavoro. Le assenze a giornata intera rendono la data indisponibile.
+Le ore di commessa restano nel rendiconto progetti.
 
-Da **Personale → Preparazione paghe**, un titolare o un amministratore può
-registrare un prospetto mensile per persona, scaricare il PDF interno ed esportare il mese in CSV.
-I totali del registro presenze appaiono a video e nel CSV dei prospetti.
-Il **Riepilogo mensile** è consultabile ed esportabile anche senza prospetti.
-Include tutte le persone in organico almeno un giorno del mese, le ore
-ordinarie e straordinarie registrate e i giorni di calendario di ferie e
-permesso compresi nel periodo. Nel CSV le celle delle ore sono vuote per
-chi è senza registrazioni di presenza.
-Il saldo somma lordo e altre competenze e sottrae contributi, ritenute e
-trattenute già quantificati e inseriti a mano. Il prospetto è per uso interno.
+Da **Personale → Preparazione paghe** scegli il mese di competenza.
+
+- **Esporta riepilogo CSV** scarica i dati di tutte le persone in organico
+  almeno un giorno del mese. Include giorni con presenza, minuti ordinari e
+  straordinari e giorni di calendario di ferie e permesso. Le assenze che
+  attraversano due mesi vengono conteggiate per i giorni compresi nel mese
+  selezionato. Le celle delle ore sono vuote dove mancano registrazioni.
+- **Nuovo prospetto** apre il prospetto di una persona. Inserisci lordo, altre
+  competenze, contributi, ritenute e altre trattenute già quantificati.
+  SuitePMI somma le competenze e sottrae le trattenute per calcolare il saldo.
+  Usa **PDF interno** per il singolo prospetto o **Esporta prospetti CSV** per
+  scaricare quelli del mese con i totali delle presenze.
+
+Il riepilogo può essere usato per trasmettere le presenze a chi elabora le paghe.
 Il calcolo contributivo e fiscale e la produzione dei cedolini ufficiali
 richiedono un motore paghe o un’integrazione dedicata.
 
@@ -214,6 +241,8 @@ richiedono un motore paghe o un’integrazione dedicata.
 
 `main` è il branch stabile. Gli aggiornamenti in lavorazione arrivano su
 [`dev-unstable`](https://github.com/Quarantuno/SuitePMI/tree/dev-unstable).
+I sorgenti della documentazione sono in [`docs/`](docs/) e il sito GitHub Pages
+pubblica quella cartella dal branch stabile.
 
 ### Build e test
 
@@ -253,13 +282,16 @@ apps/
       azienda/         dati dell'azienda per le lettere (indirizzo, PEC, IBAN)
       solleciti/       bozze, PDF della lettera, invio email/PEC, storico
       cassa/           previsione di cassa a settimane e scadenzario
-      commesse/        commesse, fatture collegate, ore e spese
+      commesse/        commesse, fatture collegate, ore, spese e bozze di contratto
+      preventivi/      preventivi PDF e conversione in commessa
+      personale/       anagrafica, assenze, presenze e preparazione paghe
     test/              test end-to-end + fattura XML di esempio
   web/                 React
-    src/pages/         Crediti, Solleciti, Cassa, Fatture, Clienti, Impostazioni, Accesso
+    src/pages/         pagine dei moduli e accesso
     src/GraficoCassa.tsx  grafico SVG fatto a mano (entrate, uscite, saldo)
 packages/
   shared/              logica e tipi condivisi (usati da API e web)
+docs/                  sito statico della documentazione
 ```
 
 ### Architettura
@@ -329,15 +361,31 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | GET | `/preventivi/:id/pdf` | Scarica il preventivo in PDF |
 | PATCH | `/preventivi/:id/stato` | Registra lo stato e crea la commessa all’accettazione |
 | GET/POST | `/commesse` | Elenco e creazione delle commesse |
-| PATCH | `/commesse/:id` | Modifica nome, budget, stato e scadenza |
+| PATCH | `/commesse/:id` | Modifica nome, budget, ricavo netto previsto, stato e scadenza |
 | GET | `/commesse/:id/fatture` | Fatture collegate e disponibili |
 | PATCH | `/commesse/:id/fatture/:fatturaId` | Collega o scollega la fattura |
 | GET/POST | `/commesse/:id/costi` | Elenco e registrazione di ore e spese |
 | DELETE | `/commesse/:id/costi/:costoId` | Elimina una voce di costo |
+| GET/POST | `/commesse/:commessaId/contratti` | Elenca e crea le bozze della commessa |
+| GET/PUT | `/commesse/:commessaId/contratti/:id` | Legge e aggiorna una bozza |
+| GET | `/commesse/:commessaId/contratti/:id/pdf` | Scarica la bozza in PDF |
 | GET/POST | `/personale` | Elenco e creazione delle schede del personale |
 | PUT | `/personale/:id` | Aggiorna una scheda del personale |
 | GET/POST | `/personale/assenze` | Calendario per mese (`?mese=AAAA-MM`) e registrazione delle assenze |
 | DELETE | `/personale/assenze/:id` | Rimuove un’assenza |
+| GET | `/personale/presenze?mese=AAAA-MM` | Elenca le registrazioni giornaliere del mese |
+| POST | `/personale/presenze` | Registra persona, giorno, minuti ordinari e straordinari |
+| PUT/DELETE | `/personale/presenze/:id` | Corregge la durata o rimuove la registrazione |
+| GET | `/personale/paghe?mese=AAAA-MM` | Elenca i prospetti interni del mese |
+| PUT | `/personale/paghe` | Salva o aggiorna il prospetto di una persona per un mese |
+| GET | `/personale/paghe/riepilogo?mese=AAAA-MM` | Riepiloga presenze e assenze per chi è in organico nel mese |
+| GET | `/personale/paghe/:id/pdf` | Scarica il prospetto interno in PDF |
+
+Le rotte `/personale` sono riservate a titolari e amministratori
+dell’azienda. Gli schemi di [presenze](packages/shared/src/personale.ts) e
+[paghe](packages/shared/src/paghe.ts) definiscono i campi delle richieste.
+Gli export CSV dei moduli Operatività vengono generati nel browser a partire
+dai dati delle API.
 
 ## Prossimi passi tecnici
 

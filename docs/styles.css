@@ -84,9 +84,11 @@ nav a { display: block; padding: .4rem 0; color: var(--inchiostro); }
 }
 
 section { padding-block: 1.15rem; border-bottom: 1px solid var(--linea); scroll-margin-top: 1rem; }
-h1, h2 { color: var(--inchiostro); line-height: 1.15; }
+h1, h2, h3 { color: var(--inchiostro); line-height: 1.15; }
 h2 { margin: .45rem 0 .8rem; font-size: 1.6rem; }
-section p { max-width: 68ch; }
+h3 { margin: 1.4rem 0 .45rem; font-size: 1.15rem; }
+section p, section li { max-width: 68ch; }
+section li + li { margin-top: .4rem; }
 
 pre {
   overflow: auto;
