@@ -25,7 +25,10 @@ export function Assenze() {
   });
   const rimuovi = useMutation({
     mutationFn: (id: string) => api<void>('/personale/assenze/' + id, { method: 'DELETE' }),
-    onSuccess: () => cache.invalidateQueries({ queryKey: ['assenze'] }),
+    onSuccess: () => Promise.all([
+      cache.invalidateQueries({ queryKey: ['assenze'] }),
+      cache.invalidateQueries({ queryKey: ['riepilogo-paghe'] }),
+    ]),
   });
 
   const inizio = new Date(mese + '-01T00:00:00Z');
@@ -115,7 +118,10 @@ function NuovaAssenza({ persone, mese, chiudi, salvata }:
   const salva = useMutation({
     mutationFn: (body: AssenzaInput) => api<Assenza>('/personale/assenze', { body }),
     onSuccess: async (a) => {
-      await cache.invalidateQueries({ queryKey: ['assenze'] });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['assenze'] }),
+        cache.invalidateQueries({ queryKey: ['riepilogo-paghe'] }),
+      ]);
       salvata(a);
     },
   });

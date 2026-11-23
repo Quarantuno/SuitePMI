@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { calendarioAssenzeSchema } from './personale';
+import { mesePersonaleSchema, type PersonaInput } from './personale';
 
-export const pagheMeseSchema = calendarioAssenzeSchema;
+export const pagheMeseSchema = mesePersonaleSchema;
 const importoPaghe = z.number().int().min(0).max(100_000_000_000);
 
 export const prospettoPagheSchema = z.object({
@@ -19,6 +19,16 @@ export type ProspettoPaghe = ProspettoPagheInput & {
   id: string;
   persona: { nome: string; cognome: string; mansione: string };
   saldoCents: number;
+};
+
+export type RiepilogoPaghe = {
+  personaId: string;
+  persona: Pick<PersonaInput, 'nome' | 'cognome' | 'mansione' | 'dataIngresso' | 'dataUscita'>;
+  giorniConPresenza: number;
+  minutiOrdinari: number;
+  minutiStraordinari: number;
+  giorniFerie: number;
+  giorniPermesso: number;
 };
 
 export function saldoPaghe(movimenti: Omit<ProspettoPagheInput, 'personaId' | 'mese'>): number {

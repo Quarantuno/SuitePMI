@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type StatoPersona } from '@suite/shared';
-import { and, asc, eq, gt, gte, inArray, lt, lte, or } from 'drizzle-orm';
+import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type RiepilogoPaghe, type StatoPersona } from '@suite/shared';
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { SessionUser } from '../common/auth';
 import { generaProspettoPaghePdf } from './prospetto-paghe.pdf';
 import { DbService, type Tx } from '../db/db.service';
@@ -172,6 +172,48 @@ export class PersonaleService {
     return this.perTitolari(user, async (tx) => {
       const [rimossa] = await tx.delete(presenze).where(eq(presenze.id, id)).returning({ id: presenze.id });
       if (!rimossa) throw new NotFoundException('Presenza non trovata');
+    });
+  }
+
+  riepilogoPaghe(user: SessionUser, mese: string): Promise<RiepilogoPaghe[]> {
+    const { inizio, fine } = limitiMese(mese);
+    return this.perTitolari(user, (tx) => {
+      const ore = tx.select({
+        personaId: presenze.personaId,
+        giorni: sql`count(*)`.as('giorni'),
+        ordinari: sql`sum(${presenze.minutiOrdinari})`.as('ordinari'),
+        straordinari: sql`sum(${presenze.minutiStraordinari})`.as('straordinari'),
+      }).from(presenze)
+        .where(and(gte(presenze.giorno, inizio), lte(presenze.giorno, fine)))
+        .groupBy(presenze.personaId)
+        .as('ore_mese');
+
+      const giorniNelMese = sql`least(${assenze.al}, ${fine}::date) - greatest(${assenze.dal}, ${inizio}::date) + 1`;
+      const assenzeMese = tx.select({
+        personaId: assenze.personaId,
+        ferie: sql`sum(${giorniNelMese}) filter (where ${assenze.tipo} = 'ferie')`.as('ferie'),
+        permessi: sql`sum(${giorniNelMese}) filter (where ${assenze.tipo} = 'permesso')`.as('permessi'),
+      }).from(assenze)
+        .where(and(lte(assenze.dal, fine), gte(assenze.al, inizio)))
+        .groupBy(assenze.personaId)
+        .as('assenze_mese');
+
+      return tx.select({
+        personaId: personale.id,
+        persona: {
+          nome: personale.nome, cognome: personale.cognome, mansione: personale.mansione,
+          dataIngresso: personale.dataIngresso, dataUscita: personale.dataUscita,
+        },
+        giorniConPresenza: sql`coalesce(${ore.giorni}, 0)`.mapWith(Number),
+        minutiOrdinari: sql`coalesce(${ore.ordinari}, 0)`.mapWith(Number),
+        minutiStraordinari: sql`coalesce(${ore.straordinari}, 0)`.mapWith(Number),
+        giorniFerie: sql`coalesce(${assenzeMese.ferie}, 0)`.mapWith(Number),
+        giorniPermesso: sql`coalesce(${assenzeMese.permessi}, 0)`.mapWith(Number),
+      }).from(personale)
+        .leftJoin(ore, eq(ore.personaId, personale.id))
+        .leftJoin(assenzeMese, eq(assenzeMese.personaId, personale.id))
+        .where(and(lte(personale.dataIngresso, fine), or(isNull(personale.dataUscita), gte(personale.dataUscita, inizio))))
+        .orderBy(asc(personale.cognome), asc(personale.nome), asc(personale.id));
     });
   }
 

@@ -199,7 +199,12 @@ permessi a giornata intera. Le ore di commessa restano nel rendiconto progetti.
 
 Da **Personale → Preparazione paghe**, un titolare o un amministratore può
 registrare un prospetto mensile per persona, scaricare il PDF interno ed esportare il mese in CSV.
-I totali del registro presenze appaiono a video e nel CSV del mese.
+I totali del registro presenze appaiono a video e nel CSV dei prospetti.
+Il **Riepilogo mensile** è consultabile ed esportabile anche senza prospetti.
+Include tutte le persone in organico almeno un giorno del mese, le ore
+ordinarie e straordinarie registrate e i giorni di calendario di ferie e
+permesso compresi nel periodo. Nel CSV le celle delle ore sono vuote per
+chi è senza registrazioni di presenza.
 Il saldo somma lordo e altre competenze e sottrae contributi, ritenute e
 trattenute già quantificati e inseriti a mano. Il prospetto è per uso interno.
 Il calcolo contributivo e fiscale e la produzione dei cedolini ufficiali

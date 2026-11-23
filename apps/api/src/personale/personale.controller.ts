@@ -77,6 +77,12 @@ export class PersonaleController {
     return this.service.salvaProspetto(user, input);
   }
 
+  @Get('paghe/riepilogo')
+  @Header('Cache-Control', 'private, no-store')
+  riepilogoPaghe(@CurrentUser() user: SessionUser, @Query(new ZodPipe(pagheMeseSchema)) query: { mese: string }) {
+    return this.service.riepilogoPaghe(user, query.mese);
+  }
+
   @Get('paghe/:id/pdf')
   @Header('Cache-Control', 'private, no-store')
   async pdfProspetto(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {

@@ -88,6 +88,7 @@ it('gestisce il personale, valida le date e limita accesso e modifica al tenant 
   }
   await http.get(endpoint).set(auth(principale)).expect(403);
   await http.get(paghe + '?mese=2020-12').set(auth(principale)).expect(403);
+  await http.get(paghe + '/riepilogo?mese=2020-12').set(auth(principale)).expect(403);
   await http.get(endpoint + '/presenze?mese=2020-12').set(auth(principale)).expect(403);
   await http.put(paghe).set(auth(principale)).send(voci).expect(403);
   await http.get(paghe + '/' + prospetto.id + '/pdf').set(auth(principale)).expect(403);
@@ -143,4 +144,60 @@ it('registra e corregge ore giornaliere, protegge assenze e date di lavoro e iso
   await http.delete(endpoint + '/' + creata.id).set(altra).expect(404);
   await http.delete(endpoint + '/' + creata.id).set(titolare).expect(204);
   await http.get(endpoint + '?mese=2028-02').set(titolare).expect(200, []);
+});
+
+it('riepiloga presenze e assenze nel mese per ogni persona in organico, anche senza prospetto', async () => {
+  const titolare = auth(await registra('riepilogo-paghe'));
+  const altra = auth(await registra('riepilogo-altra'));
+  const endpoint = '/api/personale';
+  const mese = endpoint + '/paghe/riepilogo?mese=';
+  const scheda: PersonaInput = {
+    nome: 'Mara', cognome: 'Berti', mansione: 'Consulenza', emailLavoro: null,
+    dataIngresso: '2028-01-01', dataUscita: null,
+  };
+
+  async function aggiungi(modifiche: Partial<PersonaInput> = {}) {
+    const risposta = await http.post(endpoint).set(titolare).send({ ...scheda, ...modifiche }).expect(201);
+    return risposta.body.id as string;
+  }
+
+  const personaId = await aggiungi();
+  const senzaPresenze = await aggiungi({ nome: 'Lia', cognome: 'Conti', dataIngresso: '2028-02-29', dataUscita: '2028-02-29' });
+  await aggiungi({ dataIngresso: '2028-03-01' });
+  await aggiungi({ dataUscita: '2028-01-31' });
+  const ferie = { personaId, tipo: 'ferie', dal: '2028-01-30', al: '2028-02-02' };
+  const permesso = { personaId, tipo: 'permesso', dal: '2028-02-29', al: '2028-03-02' };
+  await http.post(endpoint + '/assenze').set(titolare).send(ferie).expect(201);
+  await http.post(endpoint + '/assenze').set(titolare).send(permesso).expect(201);
+  await http.post(endpoint + '/assenze').set(titolare)
+    .send({ personaId: senzaPresenze, tipo: 'ferie', dal: '2028-02-29', al: '2028-02-29' }).expect(201);
+
+  for (const [giorno, minutiOrdinari, minutiStraordinari] of [
+    ['2028-01-29', 420, 0], ['2028-02-03', 480, 30], ['2028-02-28', 0, 90], ['2028-03-03', 450, 15],
+  ] as const) {
+    await http.post(endpoint + '/presenze').set(titolare).send({ personaId, giorno, minutiOrdinari, minutiStraordinari }).expect(201);
+  }
+
+  await http.get(mese + '2028-02').expect(401);
+  await http.get(mese + '2028-13').set(titolare).expect(400);
+  await http.get(mese + '2028-02').set(altra).expect(200, []);
+  await http.get(endpoint + '/paghe?mese=2028-02').set(titolare).expect(200, []);
+
+  const febbraio = await http.get(mese + '2028-02').set(titolare).expect(200).expect('Cache-Control', 'private, no-store');
+  expect(febbraio.body).toEqual([
+    {
+      personaId, persona: { nome: 'Mara', cognome: 'Berti', mansione: 'Consulenza', dataIngresso: '2028-01-01', dataUscita: null },
+      giorniConPresenza: 2, minutiOrdinari: 480, minutiStraordinari: 120, giorniFerie: 2, giorniPermesso: 1,
+    },
+    {
+      personaId: senzaPresenze, persona: {
+        nome: 'Lia', cognome: 'Conti', mansione: 'Consulenza', dataIngresso: '2028-02-29', dataUscita: '2028-02-29',
+      },
+      giorniConPresenza: 0, minutiOrdinari: 0, minutiStraordinari: 0, giorniFerie: 1, giorniPermesso: 0,
+    },
+  ]);
+  const marzo = await http.get(mese + '2028-03').set(titolare).expect(200);
+  expect(marzo.body.find((r: { personaId: string }) => r.personaId === personaId)).toMatchObject({
+    giorniConPresenza: 1, minutiOrdinari: 450, minutiStraordinari: 15, giorniFerie: 0, giorniPermesso: 2,
+  });
 });

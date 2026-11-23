@@ -17,7 +17,10 @@ export function Presenze() {
   const registro = useQuery(presenzeDelMese(mese));
   const rimuovi = useMutation({
     mutationFn: (id: string) => api<void>('/personale/presenze/' + id, { method: 'DELETE' }),
-    onSuccess: () => cache.invalidateQueries({ queryKey: ['presenze', mese] }),
+    onSuccess: () => Promise.all([
+      cache.invalidateQueries({ queryKey: ['presenze', mese] }),
+      cache.invalidateQueries({ queryKey: ['riepilogo-paghe', mese] }),
+    ]),
   });
   const totali = [...totaliPresenze(registro.data)].sort(([, a], [, b]) =>
     (a.persona.cognome + ' ' + a.persona.nome).localeCompare(b.persona.cognome + ' ' + b.persona.nome, 'it'),
@@ -110,7 +113,11 @@ function ModuloPresenza({ persone, giorno, presenza, chiudi, salvata }:
       ? api<Presenza>('/personale/presenze/' + presenza.id, { method: 'PUT', body })
       : api<Presenza>('/personale/presenze', { body }),
     onSuccess: async (p) => {
-      await cache.invalidateQueries({ queryKey: ['presenze', p.giorno.slice(0, 7)] });
+      const meseSalvato = p.giorno.slice(0, 7);
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['presenze', meseSalvato] }),
+        cache.invalidateQueries({ queryKey: ['riepilogo-paghe', meseSalvato] }),
+      ]);
       salvata(p);
     },
   });

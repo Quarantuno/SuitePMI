@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   campiProspettoPaghe as campi, CSV_BOM, importoCsv, pagheMeseSchema, parseEuroToCents, toCsv,
-  type Persona, type ProspettoPaghe, type ProspettoPagheInput,
+  type Persona, type ProspettoPaghe, type ProspettoPagheInput, type RiepilogoPaghe,
 } from '@suite/shared';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, salvaFile, scarica } from '../api';
-import { oreEMinuti, presenzeDelMese, totaliPresenze } from '../presenze';
+import { oreEMinuti } from '../presenze';
 import { Button, Empty, ErrorBox, Field, Money, PageHeader, Select, Tabella } from '../ui';
 
 export function Paghe() {
@@ -16,8 +16,12 @@ export function Paghe() {
   const [edita, setEdita] = useState<ProspettoPaghe | 'nuovo' | null>(null);
   const persone = useQuery({ queryKey: ['personale'], queryFn: () => api<Persona[]>('/personale') });
   const prospetti = useQuery({ queryKey: ['paghe', mese], queryFn: () => api<ProspettoPaghe[]>('/personale/paghe?mese=' + mese) });
-  const presenze = useQuery(presenzeDelMese(mese));
-  const totali = totaliPresenze(presenze.data);
+  const riepilogo = useQuery({
+    queryKey: ['riepilogo-paghe', mese],
+    staleTime: 0,
+    queryFn: () => api<RiepilogoPaghe[]>('/personale/paghe/riepilogo?mese=' + mese),
+  });
+  const totali = new Map(riepilogo.data?.map((riga) => [riga.personaId, riga]));
   const pdf = useMutation({ mutationFn: (id: string) => scarica('/personale/paghe/' + id + '/pdf') });
   const idPresenti = new Set(prospetti.data?.map((p) => p.personaId));
   const disponibili = persone.data?.filter((p) => !idPresenti.has(p.id)) ?? [];
@@ -30,19 +34,33 @@ export function Paghe() {
   }
 
   function esporta() {
-    if (!prospetti.data?.length || !presenze.isSuccess) return;
+    if (!prospetti.data?.length || !riepilogo.isSuccess) return;
     const dati = prospetti.data.map((p) => {
       const ore = totali.get(p.personaId);
       return [
         p.mese, p.persona.nome, p.persona.cognome, p.persona.mansione,
         ...campi.map(([campo]) => importoCsv(p[campo])), importoCsv(p.saldoCents),
-        ore?.minutiOrdinari ?? '', ore?.minutiStraordinari ?? '',
+        ore?.giorniConPresenza ? ore.minutiOrdinari : '',
+        ore?.giorniConPresenza ? ore.minutiStraordinari : '',
       ];
     });
     salvaFile('preparazione-paghe-' + mese + '.csv', CSV_BOM + toCsv([
       ['Mese', 'Nome', 'Cognome', 'Mansione', ...campi.map(([, label]) => label + ' (€)'), 'Saldo calcolato (€)',
         'Ordinario (minuti)', 'Straordinario (minuti)'],
       ...dati,
+    ]));
+  }
+
+  function esportaRiepilogo() {
+    if (!riepilogo.isSuccess || !riepilogo.data.length) return;
+    salvaFile('riepilogo-mensile-paghe-' + mese + '.csv', CSV_BOM + toCsv([
+      ['Mese', 'ID persona', 'Cognome', 'Nome', 'Mansione', 'Data ingresso', 'Data uscita', 'Giorni con presenza',
+        'Ordinario (minuti)', 'Straordinario (minuti)', 'Ferie (giorni di calendario)', 'Permessi (giorni di calendario)'],
+      ...riepilogo.data.map((r) => [
+        mese, r.personaId, r.persona.cognome, r.persona.nome, r.persona.mansione, r.persona.dataIngresso, r.persona.dataUscita,
+        r.giorniConPresenza, r.giorniConPresenza ? r.minutiOrdinari : '', r.giorniConPresenza ? r.minutiStraordinari : '',
+        r.giorniFerie, r.giorniPermesso,
+      ]),
     ]));
   }
 
@@ -54,7 +72,7 @@ export function Paghe() {
           <Link to="/personale/presenze">Registro presenze</Link>
         </>
       } />
-      <ErrorBox error={persone.error ?? prospetti.error ?? presenze.error ?? pdf.error} />
+      <ErrorBox error={persone.error ?? prospetti.error ?? riepilogo.error ?? pdf.error} />
       <section className="card">
         <div className="card-row">
           <form className="inline-form" onSubmit={cambiaMese}>
@@ -63,7 +81,7 @@ export function Paghe() {
             <Button type="submit" variant="secondary" disabled={!!edita}>Mostra mese</Button>
           </form>
           <div className="page-actions">
-            {!!prospetti.data?.length && <Button variant="secondary" onClick={esporta} disabled={!presenze.isSuccess}>Esporta CSV</Button>}
+            {!!prospetti.data?.length && <Button variant="secondary" onClick={esporta} disabled={!riepilogo.isSuccess || riepilogo.isFetching}>Esporta prospetti CSV</Button>}
             {prospetti.isSuccess && !!disponibili.length && !edita && <Button onClick={() => setEdita('nuovo')}>Nuovo prospetto</Button>}
           </div>
         </div>
@@ -78,8 +96,8 @@ export function Paghe() {
                 return (
                   <tr key={p.id}>
                     <td>{p.persona.cognome} {p.persona.nome}</td>
-                    <td className="r">{ore ? oreEMinuti(ore.minutiOrdinari) : '—'}</td>
-                    <td className="r">{ore ? oreEMinuti(ore.minutiStraordinari) : '—'}</td>
+                    <td className="r">{ore?.giorniConPresenza ? oreEMinuti(ore.minutiOrdinari) : '—'}</td>
+                    <td className="r">{ore?.giorniConPresenza ? oreEMinuti(ore.minutiStraordinari) : '—'}</td>
                     {campi.map(([campo]) => <td key={campo} className="r"><Money cents={p[campo]} /></td>)}
                     <td className="r"><Money cents={p.saldoCents} strong /></td>
                     <td>
@@ -97,12 +115,47 @@ export function Paghe() {
       </section>
       {edita && <ModuloPaghe key={edita === 'nuovo' ? 'nuovo' : edita.id} mese={mese}
         persone={disponibili} totali={totali} prospetto={edita === 'nuovo' ? undefined : edita} chiudi={() => setEdita(null)} />}
+      <section className="card">
+        <div className="card-row">
+          <h2>Riepilogo mensile</h2>
+          {!!riepilogo.data?.length && (
+            <Button variant="secondary" onClick={esportaRiepilogo} disabled={!riepilogo.isSuccess || riepilogo.isFetching}>Esporta riepilogo CSV</Button>
+          )}
+        </div>
+        {riepilogo.isPending && <p>Caricamento riepilogo…</p>}
+        {riepilogo.data?.length === 0 && <Empty title="Nessuna persona in organico nel mese selezionato" />}
+        {!!riepilogo.data?.length && (
+          <>
+            <p className="muted">Ferie e permessi sono conteggiati in giorni di calendario. Il trattino indica ore ancora da registrare.</p>
+            <Tabella>
+              <thead>
+                <tr>
+                  <th>Persona</th><th className="r">Giorni con presenza</th><th className="r">Ore ordinarie</th>
+                  <th className="r">Straordinario</th><th className="r">Giorni di ferie</th><th className="r">Giorni di permesso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {riepilogo.data.map((r) => (
+                  <tr key={r.personaId}>
+                    <td>{r.persona.cognome} {r.persona.nome}</td>
+                    <td className="r">{r.giorniConPresenza}</td>
+                    <td className="r">{r.giorniConPresenza ? oreEMinuti(r.minutiOrdinari) : '—'}</td>
+                    <td className="r">{r.giorniConPresenza ? oreEMinuti(r.minutiStraordinari) : '—'}</td>
+                    <td className="r">{r.giorniFerie}</td>
+                    <td className="r">{r.giorniPermesso}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Tabella>
+          </>
+        )}
+      </section>
     </>
   );
 }
 
 function ModuloPaghe({ mese, persone, totali, prospetto, chiudi }:
-  { mese: string; persone: Persona[]; totali: ReturnType<typeof totaliPresenze>; prospetto?: ProspettoPaghe; chiudi: () => void }) {
+  { mese: string; persone: Persona[]; totali: Map<string, RiepilogoPaghe>; prospetto?: ProspettoPaghe; chiudi: () => void }) {
   const cache = useQueryClient();
   const [personaId, setPersonaId] = useState(prospetto?.personaId ?? '');
   const ore = totali.get(personaId);
@@ -140,7 +193,7 @@ function ModuloPaghe({ mese, persone, totali, prospetto, chiudi }:
           {persone.map((p) => <option key={p.id} value={p.id}>{p.cognome} {p.nome} · {p.mansione}</option>)}
         </Select>
       )}
-      {ore && <p>Ore ordinarie {oreEMinuti(ore.minutiOrdinari)} · Straordinario {oreEMinuti(ore.minutiStraordinari)}</p>}
+      {!!ore?.giorniConPresenza && <p>Ore ordinarie {oreEMinuti(ore.minutiOrdinari)} · Straordinario {oreEMinuti(ore.minutiStraordinari)}</p>}
       <div className="grid-2">
         {campi.map(([campo, label]) => (
           <Field key={campo} label={label + ' (€)'} name={campo} inputMode="decimal"

@@ -96,7 +96,10 @@ function SchedaPersona({ persona, chiudi }: { persona?: Persona; chiudi: () => v
         : api<Persona>('/personale', { body });
     },
     onSuccess: async () => {
-      await cache.invalidateQueries({ queryKey: ['personale'] });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['personale'] }),
+        cache.invalidateQueries({ queryKey: ['riepilogo-paghe'] }),
+      ]);
       chiudi();
     },
   });
