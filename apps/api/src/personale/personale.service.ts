@@ -1,10 +1,15 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { addDays, saldoPaghe, type ProspettoPaghe, type ProspettoPagheInput, type Assenza, type AssenzaInput, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type RiepilogoPaghe, type StatoPersona } from '@suite/shared';
-import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import {
+  addDays, saldoPaghe, type Assenza, type AssenzaInput, type ContrattoLavoro, type ContrattoLavoroInput,
+  type ContrattoLavoroSintesi, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type ProspettoPaghe,
+  type ProspettoPagheInput, type RiepilogoPaghe, type StatoPersona,
+} from '@suite/shared';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { SessionUser } from '../common/auth';
 import { generaProspettoPaghePdf } from './prospetto-paghe.pdf';
 import { DbService, type Tx } from '../db/db.service';
-import { assenze, aziende, membri, personale, presenze, prospettiPaghe } from '../db/schema';
+import { assenze, aziende, contrattiLavoro, membri, personale, presenze, prospettiPaghe } from '../db/schema';
+import { generaContrattoLavoroPdf } from './contratto-lavoro.pdf';
 
 const campiPersona = {
   id: personale.id,
@@ -15,6 +20,17 @@ const campiPersona = {
   dataIngresso: personale.dataIngresso,
   dataUscita: personale.dataUscita,
 };
+
+const sintesiContrattoLavoro = {
+  id: contrattiLavoro.id,
+  titolo: contrattiLavoro.titolo,
+  decorrenza: contrattiLavoro.decorrenza,
+};
+const campiContrattoLavoro = { ...sintesiContrattoLavoro, testo: contrattiLavoro.testo };
+
+function bozzaDellaPersona(personaId: string, id: string) {
+  return and(eq(contrattiLavoro.personaId, personaId), eq(contrattiLavoro.id, id));
+}
 
 const calendarioItaliano = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', dateStyle: 'short' });
 
@@ -263,6 +279,68 @@ export class PersonaleService {
     });
     return generaProspettoPaghePdf({ ...dati.prospetto, persona: dati.persona, saldoCents: saldoPaghe(dati.prospetto) },
       dati.azienda.ragioneSociale);
+  }
+
+  contrattiLavoro(user: SessionUser, personaId: string): Promise<ContrattoLavoroSintesi[]> {
+    return this.perTitolari(user, async (tx) => {
+      const persona = await tx.query.personale.findFirst({ where: eq(personale.id, personaId), columns: { id: true } });
+      if (!persona) throw new NotFoundException('Persona non trovata');
+      return tx.select(sintesiContrattoLavoro).from(contrattiLavoro)
+        .where(eq(contrattiLavoro.personaId, personaId))
+        .orderBy(desc(contrattiLavoro.decorrenza), asc(contrattiLavoro.titolo), asc(contrattiLavoro.id));
+    });
+  }
+
+  creaContrattoLavoro(user: SessionUser, personaId: string, input: ContrattoLavoroInput): Promise<ContrattoLavoro> {
+    return this.perTitolari(user, async (tx) => {
+      await this.bloccaPersona(tx, personaId);
+      const [bozza] = await tx.insert(contrattiLavoro)
+        .values({ ...input, aziendaId: user.aziendaId, personaId }).returning(campiContrattoLavoro);
+      return bozza!;
+    });
+  }
+
+  leggiContrattoLavoro(user: SessionUser, personaId: string, id: string): Promise<ContrattoLavoro> {
+    return this.perTitolari(user, async (tx) => {
+      const [bozza] = await tx.select(campiContrattoLavoro).from(contrattiLavoro)
+        .where(bozzaDellaPersona(personaId, id));
+      if (!bozza) throw new NotFoundException('Bozza non trovata');
+      return bozza;
+    });
+  }
+
+  aggiornaContrattoLavoro(user: SessionUser, personaId: string, id: string, input: ContrattoLavoroInput): Promise<ContrattoLavoro> {
+    return this.perTitolari(user, async (tx) => {
+      const [bozza] = await tx.update(contrattiLavoro).set(input)
+        .where(bozzaDellaPersona(personaId, id)).returning(campiContrattoLavoro);
+      if (!bozza) throw new NotFoundException('Bozza non trovata');
+      return bozza;
+    });
+  }
+
+  rimuoviContrattoLavoro(user: SessionUser, personaId: string, id: string): Promise<void> {
+    return this.perTitolari(user, async (tx) => {
+      const [bozza] = await tx.delete(contrattiLavoro)
+        .where(bozzaDellaPersona(personaId, id)).returning({ id: contrattiLavoro.id });
+      if (!bozza) throw new NotFoundException('Bozza non trovata');
+    });
+  }
+
+  async pdfContrattoLavoro(user: SessionUser, personaId: string, id: string): Promise<Buffer> {
+    const dati = await this.perTitolari(user, async (tx) => {
+      const [riga] = await tx.select({
+        ...campiContrattoLavoro,
+        persona: { nome: personale.nome, cognome: personale.cognome, mansione: personale.mansione },
+        azienda: { ragioneSociale: aziende.ragioneSociale, partitaIva: aziende.partitaIva, indirizzo: aziende.indirizzo },
+      }).from(contrattiLavoro)
+        .innerJoin(personale, eq(contrattiLavoro.personaId, personale.id))
+        .innerJoin(aziende, eq(contrattiLavoro.aziendaId, aziende.id))
+        .where(bozzaDellaPersona(personaId, id));
+      if (!riga) throw new NotFoundException('Bozza non trovata');
+      return riga;
+    });
+
+    return generaContrattoLavoroPdf(dati);
   }
 
   private async bloccaPersona(tx: Tx, id: string) {

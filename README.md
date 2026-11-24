@@ -17,7 +17,7 @@ presenze e assenze e prepara il riepilogo mensile per le paghe.
 | **Cassa** | Previsione settimanale da 4 a 26 settimane e scadenzario di incassi e pagamenti. |
 | **Preventivi** | Bozze, voci e IVA, esportazione PDF e conversione in commessa. |
 | **Commesse** | Budget, fatture collegate, rendiconto ore e spese, margine e bozze di contratto. |
-| **Personale** | Anagrafica, ingressi e uscite, ferie e permessi, registro presenze, preparazione paghe. |
+| **Personale** | Anagrafica, ingressi e uscite, ferie e permessi, registro presenze, bozze di contratto di lavoro, preparazione paghe. |
 
 ## Avvio rapido
 
@@ -210,6 +210,12 @@ Titolari e amministratori possono creare e aggiornare le schede dalla pagina
 l’elenco per stato. Lo stato deriva dalle date di ingresso e uscita. La persona
 risulta attiva fino all’ultimo giorno di lavoro compreso.
 
+Dalla riga di una persona, apri **Contratti di lavoro → Nuova bozza**. Inserisci
+titolo, decorrenza e il testo del contratto. Puoi conservare più bozze, correggerle
+e scaricare il PDF con i dati dell’azienda e della persona. La decorrenza della
+bozza è indipendente dalle date della scheda. Il documento riporta la dicitura
+**Bozza di contratto di lavoro**.
+
 Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera e
 consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
 per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
@@ -371,6 +377,9 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | GET | `/commesse/:commessaId/contratti/:id/pdf` | Scarica la bozza in PDF |
 | GET/POST | `/personale` | Elenco e creazione delle schede del personale |
 | PUT | `/personale/:id` | Aggiorna una scheda del personale |
+| GET/POST | `/personale/:personaId/contratti` | Elenca e crea le bozze di contratto di lavoro |
+| GET/PUT/DELETE | `/personale/:personaId/contratti/:id` | Legge, modifica o elimina una bozza |
+| GET | `/personale/:personaId/contratti/:id/pdf` | Scarica il PDF della bozza |
 | GET/POST | `/personale/assenze` | Calendario per mese (`?mese=AAAA-MM`) e registrazione delle assenze |
 | DELETE | `/personale/assenze/:id` | Rimuove un’assenza |
 | GET | `/personale/presenze?mese=AAAA-MM` | Elenca le registrazioni giornaliere del mese |

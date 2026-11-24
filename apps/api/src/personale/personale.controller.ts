@@ -1,5 +1,9 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, StreamableFile } from '@nestjs/common';
-import { assenzaSchema, calendarioAssenzeSchema, mesePersonaleSchema, pagheMeseSchema, personaSchema, presenzaSchema, prospettoPagheSchema, type AssenzaInput, type PersonaInput, type PresenzaInput, type ProspettoPagheInput } from '@suite/shared';
+import {
+  assenzaSchema, calendarioAssenzeSchema, contrattoLavoroSchema, mesePersonaleSchema, pagheMeseSchema, personaSchema,
+  presenzaSchema, prospettoPagheSchema, type AssenzaInput, type ContrattoLavoroInput, type PersonaInput,
+  type PresenzaInput, type ProspettoPagheInput,
+} from '@suite/shared';
 import { CurrentUser, type SessionUser } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
 import { PersonaleService } from './personale.service';
@@ -88,6 +92,64 @@ export class PersonaleController {
   async pdfProspetto(@CurrentUser() user: SessionUser, @Param('id', ParseUUIDPipe) id: string) {
     const pdf = await this.service.pdfProspetto(user, id);
     return new StreamableFile(pdf, { type: 'application/pdf', disposition: 'attachment; filename="prospetto-interno-' + id + '.pdf"' });
+  }
+
+  @Get(':personaId/contratti')
+  @Header('Cache-Control', 'private, no-store')
+  contrattiLavoro(@CurrentUser() user: SessionUser, @Param('personaId', ParseUUIDPipe) personaId: string) {
+    return this.service.contrattiLavoro(user, personaId);
+  }
+
+  @Post(':personaId/contratti')
+  @Header('Cache-Control', 'private, no-store')
+  creaContrattoLavoro(
+    @CurrentUser() user: SessionUser,
+    @Param('personaId', ParseUUIDPipe) personaId: string,
+    @Body(new ZodPipe(contrattoLavoroSchema)) input: ContrattoLavoroInput,
+  ) {
+    return this.service.creaContrattoLavoro(user, personaId, input);
+  }
+
+  @Get(':personaId/contratti/:id')
+  @Header('Cache-Control', 'private, no-store')
+  leggiContrattoLavoro(
+    @CurrentUser() user: SessionUser,
+    @Param('personaId', ParseUUIDPipe) personaId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.leggiContrattoLavoro(user, personaId, id);
+  }
+
+  @Put(':personaId/contratti/:id')
+  @Header('Cache-Control', 'private, no-store')
+  aggiornaContrattoLavoro(
+    @CurrentUser() user: SessionUser,
+    @Param('personaId', ParseUUIDPipe) personaId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(contrattoLavoroSchema)) input: ContrattoLavoroInput,
+  ) {
+    return this.service.aggiornaContrattoLavoro(user, personaId, id, input);
+  }
+
+  @Delete(':personaId/contratti/:id')
+  @HttpCode(204)
+  rimuoviContrattoLavoro(
+    @CurrentUser() user: SessionUser,
+    @Param('personaId', ParseUUIDPipe) personaId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.rimuoviContrattoLavoro(user, personaId, id);
+  }
+
+  @Get(':personaId/contratti/:id/pdf')
+  @Header('Cache-Control', 'private, no-store')
+  async pdfContrattoLavoro(
+    @CurrentUser() user: SessionUser,
+    @Param('personaId', ParseUUIDPipe) personaId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const pdf = await this.service.pdfContrattoLavoro(user, personaId, id);
+    return new StreamableFile(pdf, { type: 'application/pdf', disposition: 'attachment; filename="bozza-contratto-lavoro-' + id + '.pdf"' });
   }
 
   @Put(':id')

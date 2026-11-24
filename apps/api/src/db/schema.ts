@@ -132,6 +132,19 @@ export const presenze = pgTable(
   ],
 );
 
+export const contrattiLavoro = pgTable(
+  'contratti_lavoro',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    aziendaId: aziendaId(),
+    personaId: uuid('persona_id').notNull().references(() => personale.id, { onDelete: 'restrict' }),
+    titolo: text('titolo').notNull(),
+    decorrenza: date('decorrenza', { mode: 'string' }).notNull(),
+    testo: text('testo').notNull(),
+  },
+  (t) => [index('contratti_lavoro_persona_decorrenza_idx').on(t.personaId, t.decorrenza)],
+);
+
 export const prospettiPaghe = pgTable(
   'prospetti_paghe',
   {

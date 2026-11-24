@@ -64,7 +64,12 @@ export function Personale() {
                           <td>{formatData(p.dataIngresso)}</td>
                           <td>{p.dataUscita ? formatData(p.dataUscita) : '—'}</td>
                           <td><span className={p.stato === 'attivo' ? 'badge badge-ok' : 'badge'}>{stati[p.stato]}</span></td>
-                          <td><Button variant="ghost" disabled={!!scheda} onClick={() => setScheda(p)}>Modifica</Button></td>
+                          <td>
+                            <div className="page-actions">
+                              <Button variant="ghost" disabled={!!scheda} onClick={() => setScheda(p)}>Modifica</Button>
+                              <Link to={p.id + '/contratti'} aria-label={'Contratti di lavoro di ' + p.nome + ' ' + p.cognome}>Contratti di lavoro</Link>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

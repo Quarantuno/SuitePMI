@@ -5,6 +5,7 @@ import { Cassa } from './pages/Cassa';
 import { Clienti } from './pages/Clienti';
 import { Assenze } from './pages/Assenze';
 import { ModificaPreventivo, Preventivi, PreventivoDettaglio } from './pages/Preventivi';
+import { ContrattiLavoro } from './pages/ContrattiLavoro';
 import { ContrattiCommessa } from './pages/ContrattiCommessa';
 import { Paghe } from './pages/Paghe';
 import { Presenze } from './pages/Presenze';
@@ -131,6 +132,7 @@ export function App() {
         <Route path="personale/presenze" element={<Presenze />} />
         <Route path="personale/paghe" element={<Paghe />} />
         <Route path="personale/assenze" element={<Assenze />} />
+        <Route path="personale/:id/contratti" element={<ContrattiLavoro />} />
         <Route path="commesse" element={<Commesse />} />
         <Route path="commesse/:id" element={<CommessaDettaglio />} />
         <Route path="commesse/:id/contratti" element={<ContrattiCommessa />} />

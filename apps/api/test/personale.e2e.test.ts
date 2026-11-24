@@ -201,3 +201,66 @@ it('riepiloga presenze e assenze nel mese per ogni persona in organico, anche se
     giorniConPresenza: 1, minutiOrdinari: 450, minutiStraordinari: 15, giorniFerie: 0, giorniPermesso: 2,
   });
 });
+
+it('gestisce più bozze di contratto per persona e riserva testo e PDF agli amministratori dell’azienda', async () => {
+  const sessione = await registra('contratti-lavoro');
+  const titolare = auth(sessione);
+  const altra = auth(await registra('contratti-lavoro-altra'));
+  const scheda: PersonaInput = {
+    nome: 'Lea', cognome: 'Moretti', mansione: 'Sviluppo', emailLavoro: null,
+    dataIngresso: '2028-02-01', dataUscita: null,
+  };
+  const persona = (await http.post('/api/personale').set(titolare).send(scheda).expect(201)).body;
+  const collega = (await http.post('/api/personale').set(titolare).send({ ...scheda, nome: 'Ada' }).expect(201)).body;
+  const endpoint = '/api/personale/' + persona.id + '/contratti';
+  const altroEndpoint = '/api/personale/' + collega.id + '/contratti';
+  const bozza = { titolo: 'Incarico di sviluppo', decorrenza: '2028-02-01', testo: 'Testo della bozza di incarico.' };
+
+  await http.get(endpoint).expect(401);
+  await http.get(endpoint).set(altra).expect(404);
+  await http.post(endpoint).set(altra).send(bozza).expect(404);
+  await http.post(endpoint).set(titolare).send({ ...bozza, decorrenza: '2028-02-30' }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...bozza, decorrenza: '0000-01-01' }).expect(400);
+  await http.post(endpoint).set(titolare).send({ ...bozza, testo: '  ' }).expect(400);
+
+  const creata = (await http.post(endpoint).set(titolare).send(bozza).expect(201)).body;
+  expect(creata).toEqual({ id: expect.any(String), ...bozza });
+  const rinnovo = { ...bozza, titolo: 'Nuova bozza', decorrenza: '2028-07-01' };
+  const seconda = (await http.post(endpoint).set(titolare).send(rinnovo).expect(201)).body;
+  const elenco = await http.get(endpoint).set(titolare).expect(200).expect('Cache-Control', 'private, no-store');
+  expect(elenco.body).toEqual([
+    { id: seconda.id, titolo: rinnovo.titolo, decorrenza: rinnovo.decorrenza },
+    { id: creata.id, titolo: bozza.titolo, decorrenza: bozza.decorrenza },
+  ]);
+  await http.get(altroEndpoint).set(titolare).expect(200, []);
+  const percorso = endpoint + '/' + creata.id;
+  await http.get(percorso).set(altra).expect(404);
+  await http.put(percorso).set(altra).send(bozza).expect(404);
+  await http.delete(percorso).set(altra).expect(404);
+  await http.get(altroEndpoint + '/' + creata.id).set(titolare).expect(404);
+  await http.get(percorso).set(titolare).expect(200, creata).expect('Cache-Control', 'private, no-store');
+  const aggiornata = { ...bozza, testo: 'Testo modificato della bozza.' };
+  await http.put(percorso).set(titolare).send(aggiornata).expect(200, { id: creata.id, ...aggiornata });
+
+  await http.get(percorso + '/pdf').set(altra).expect(404);
+  await http.get(altroEndpoint + '/' + creata.id + '/pdf').set(titolare).expect(404);
+  const pdf = await http.get(percorso + '/pdf').set(titolare).expect(200)
+    .expect('Cache-Control', 'private, no-store')
+    .expect('Content-Type', 'application/pdf');
+  expect(pdf.headers['content-disposition']).toContain('bozza-contratto-lavoro-' + creata.id);
+  expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+
+  await http.delete(endpoint + '/' + seconda.id).set(titolare).expect(204);
+  await http.get(endpoint + '/' + seconda.id + '/pdf').set(titolare).expect(404);
+
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("UPDATE membri SET ruolo = 'membro' WHERE utente_id = $1", [sessione.utente.id]);
+  } finally {
+    await db.end();
+  }
+  await http.get(endpoint).set(titolare).expect(403);
+  await http.get(percorso + '/pdf').set(titolare).expect(403);
+  await http.delete(percorso).set(titolare).expect(403);
+});
