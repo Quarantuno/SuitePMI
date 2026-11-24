@@ -20,15 +20,23 @@ export type Persona = PersonaInput & { id: string; stato: StatoPersona };
 export const tipiAssenza = ['ferie', 'permesso'] as const;
 export type TipoAssenza = (typeof tipiAssenza)[number];
 
+export const minutiPerGiorno = 1440;
+
 export const assenzaSchema = z.object({
   personaId: z.uuid(),
   tipo: z.enum(tipiAssenza),
   dal: isoDate,
   al: isoDate,
-}).strict().refine((a) => a.al >= a.dal, {
-  path: ['al'],
-  message: 'L’ultimo giorno deve essere uguale o successivo al primo',
-});
+  minuti: z.number().int().min(1).max(minutiPerGiorno - 1).optional(),
+}).strict()
+  .refine((a) => a.al >= a.dal, {
+    path: ['al'],
+    message: 'L’ultimo giorno deve essere uguale o successivo al primo',
+  })
+  .refine((a) => a.minuti === undefined || (a.tipo === 'permesso' && a.dal === a.al), {
+    path: ['minuti'],
+    message: 'Un permesso a ore deve riferirsi a un solo giorno',
+  });
 
 export const mesePersonaleSchema = z.object({
   mese: z.string().regex(/^(?:19\d{2}|[2-9]\d{3})-(?:0[1-9]|1[0-2])$/, 'Indica un mese nel formato AAAA-MM'),
@@ -39,7 +47,7 @@ export const calendarioAssenzeSchema = mesePersonaleSchema;
 export type AssenzaInput = z.infer<typeof assenzaSchema>;
 export type Assenza = AssenzaInput & { id: string; persona: { nome: string; cognome: string } };
 
-const minutiGiornalieri = z.number().int().min(0).max(1440);
+const minutiGiornalieri = z.number().int().min(0).max(minutiPerGiorno);
 
 export const presenzaSchema = z.object({
   personaId: z.uuid(),
@@ -49,7 +57,7 @@ export const presenzaSchema = z.object({
   minutiStraordinari: minutiGiornalieri,
 }).strict().refine(({ minutiOrdinari, minutiStraordinari }) => {
   const totale = minutiOrdinari + minutiStraordinari;
-  return totale >= 1 && totale <= 1440;
+  return totale >= 1 && totale <= minutiPerGiorno;
 }, {
   path: ['minutiStraordinari'],
   message: 'Indica da 1 a 1440 minuti complessivi per giorno',

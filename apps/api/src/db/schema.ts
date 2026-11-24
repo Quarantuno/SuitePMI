@@ -105,11 +105,14 @@ export const assenze = pgTable(
     tipo: text('tipo', { enum: tipiAssenza }).notNull(),
     dal: date('dal', { mode: 'string' }).notNull(),
     al: date('al', { mode: 'string' }).notNull(),
+    minuti: integer('minuti'),
   },
   (t) => [
     index('assenze_azienda_dal_idx').on(t.aziendaId, t.dal),
     index('assenze_persona_idx').on(t.personaId),
     check('assenze_date_coerenti', sql`${t.al} >= ${t.dal}`),
+    check('assenze_permesso_orario_valido', sql`${t.minuti} IS NULL OR
+      (${t.tipo} = 'permesso' AND ${t.al} = ${t.dal} AND ${t.minuti} BETWEEN 1 AND 1439)`),
   ],
 );
 

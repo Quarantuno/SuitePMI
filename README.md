@@ -216,9 +216,11 @@ e scaricare il PDF con i dati dell’azienda e della persona. La decorrenza dell
 bozza è indipendente dalle date della scheda. Il documento riporta la dicitura
 **Bozza di contratto di lavoro**.
 
-Da **Personale → Ferie e permessi** puoi registrare assenze a giornata intera e
-consultarle per mese. Le date sono inclusive. L’app impedisce sovrapposizioni
-per la stessa persona e controlla che l’assenza rientri nel periodo di lavoro.
+Da **Personale → Ferie e permessi** puoi registrare ferie e permessi a giornata
+intera con date inclusive. Per un **Permesso a ore** indica un singolo giorno e
+la durata in minuti. Puoi registrare anche la presenza nella stessa giornata.
+Il calendario ammette una sola assenza per persona al giorno e controlla che
+rientri nel periodo di lavoro.
 
 Da **Personale → Registro presenze** puoi inserire i minuti ordinari e
 straordinari per persona e giorno, correggere le registrazioni e consultare i
@@ -230,7 +232,8 @@ Da **Personale → Preparazione paghe** scegli il mese di competenza.
 
 - **Esporta riepilogo CSV** scarica i dati di tutte le persone in organico
   almeno un giorno del mese. Include giorni con presenza, minuti ordinari e
-  straordinari e giorni di calendario di ferie e permesso. Le assenze che
+  straordinari, giorni di calendario di ferie e permesso e minuti di permesso
+  a ore. Le assenze che
   attraversano due mesi vengono conteggiate per i giorni compresi nel mese
   selezionato. Le celle delle ore sono vuote dove mancano registrazioni.
 - **Nuovo prospetto** apre il prospetto di una persona. Inserisci lordo, altre
@@ -380,7 +383,7 @@ Gli endpoint hanno prefisso `/api`. Per quelli protetti, invia l’header `Autho
 | GET/POST | `/personale/:personaId/contratti` | Elenca e crea le bozze di contratto di lavoro |
 | GET/PUT/DELETE | `/personale/:personaId/contratti/:id` | Legge, modifica o elimina una bozza |
 | GET | `/personale/:personaId/contratti/:id/pdf` | Scarica il PDF della bozza |
-| GET/POST | `/personale/assenze` | Calendario per mese (`?mese=AAAA-MM`) e registrazione delle assenze |
+| GET/POST | `/personale/assenze` | Calendario per mese (`?mese=AAAA-MM`) e registrazione delle assenze. Per un permesso a ore, invia `minuti` e usa lo stesso giorno per `dal` e `al` |
 | DELETE | `/personale/assenze/:id` | Rimuove un’assenza |
 | GET | `/personale/presenze?mese=AAAA-MM` | Elenca le registrazioni giornaliere del mese |
 | POST | `/personale/presenze` | Registra persona, giorno, minuti ordinari e straordinari |

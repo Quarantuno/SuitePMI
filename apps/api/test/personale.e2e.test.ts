@@ -187,18 +187,18 @@ it('riepiloga presenze e assenze nel mese per ogni persona in organico, anche se
   expect(febbraio.body).toEqual([
     {
       personaId, persona: { nome: 'Mara', cognome: 'Berti', mansione: 'Consulenza', dataIngresso: '2028-01-01', dataUscita: null },
-      giorniConPresenza: 2, minutiOrdinari: 480, minutiStraordinari: 120, giorniFerie: 2, giorniPermesso: 1,
+      giorniConPresenza: 2, minutiOrdinari: 480, minutiStraordinari: 120, giorniFerie: 2, giorniPermesso: 1, minutiPermesso: 0,
     },
     {
       personaId: senzaPresenze, persona: {
         nome: 'Lia', cognome: 'Conti', mansione: 'Consulenza', dataIngresso: '2028-02-29', dataUscita: '2028-02-29',
       },
-      giorniConPresenza: 0, minutiOrdinari: 0, minutiStraordinari: 0, giorniFerie: 1, giorniPermesso: 0,
+      giorniConPresenza: 0, minutiOrdinari: 0, minutiStraordinari: 0, giorniFerie: 1, giorniPermesso: 0, minutiPermesso: 0,
     },
   ]);
   const marzo = await http.get(mese + '2028-03').set(titolare).expect(200);
   expect(marzo.body.find((r: { personaId: string }) => r.personaId === personaId)).toMatchObject({
-    giorniConPresenza: 1, minutiOrdinari: 450, minutiStraordinari: 15, giorniFerie: 0, giorniPermesso: 2,
+    giorniConPresenza: 1, minutiOrdinari: 450, minutiStraordinari: 15, giorniFerie: 0, giorniPermesso: 2, minutiPermesso: 0,
   });
 });
 

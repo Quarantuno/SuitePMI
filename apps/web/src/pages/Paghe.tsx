@@ -55,11 +55,12 @@ export function Paghe() {
     if (!riepilogo.isSuccess || !riepilogo.data.length) return;
     salvaFile('riepilogo-mensile-paghe-' + mese + '.csv', CSV_BOM + toCsv([
       ['Mese', 'ID persona', 'Cognome', 'Nome', 'Mansione', 'Data ingresso', 'Data uscita', 'Giorni con presenza',
-        'Ordinario (minuti)', 'Straordinario (minuti)', 'Ferie (giorni di calendario)', 'Permessi (giorni di calendario)'],
+        'Ordinario (minuti)', 'Straordinario (minuti)', 'Ferie (giorni di calendario)', 'Permessi (giorni di calendario)',
+        'Permessi a ore (minuti)'],
       ...riepilogo.data.map((r) => [
         mese, r.personaId, r.persona.cognome, r.persona.nome, r.persona.mansione, r.persona.dataIngresso, r.persona.dataUscita,
         r.giorniConPresenza, r.giorniConPresenza ? r.minutiOrdinari : '', r.giorniConPresenza ? r.minutiStraordinari : '',
-        r.giorniFerie, r.giorniPermesso,
+        r.giorniFerie, r.giorniPermesso, r.minutiPermesso,
       ]),
     ]));
   }
@@ -126,12 +127,13 @@ export function Paghe() {
         {riepilogo.data?.length === 0 && <Empty title="Nessuna persona in organico nel mese selezionato" />}
         {!!riepilogo.data?.length && (
           <>
-            <p className="muted">Ferie e permessi sono conteggiati in giorni di calendario. Il trattino indica ore ancora da registrare.</p>
+            <p className="muted">Le assenze a giornata intera sono conteggiate in giorni di calendario. Il trattino indica ore di presenza ancora da registrare.</p>
             <Tabella>
               <thead>
                 <tr>
                   <th>Persona</th><th className="r">Giorni con presenza</th><th className="r">Ore ordinarie</th>
                   <th className="r">Straordinario</th><th className="r">Giorni di ferie</th><th className="r">Giorni di permesso</th>
+                  <th className="r">Permessi a ore</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,6 +145,7 @@ export function Paghe() {
                     <td className="r">{r.giorniConPresenza ? oreEMinuti(r.minutiStraordinari) : '—'}</td>
                     <td className="r">{r.giorniFerie}</td>
                     <td className="r">{r.giorniPermesso}</td>
+                    <td className="r">{oreEMinuti(r.minutiPermesso)}</td>
                   </tr>
                 ))}
               </tbody>

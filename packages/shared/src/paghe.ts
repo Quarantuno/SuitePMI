@@ -29,6 +29,7 @@ export type RiepilogoPaghe = {
   minutiStraordinari: number;
   giorniFerie: number;
   giorniPermesso: number;
+  minutiPermesso: number;
 };
 
 export function saldoPaghe(movimenti: Omit<ProspettoPagheInput, 'personaId' | 'mese'>): number {

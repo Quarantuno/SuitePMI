@@ -120,6 +120,13 @@
       "when": 1795546261754,
       "tag": "0016_contratti_lavoro",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795551701562,
+      "tag": "0017_permessi_orari",
+      "breakpoints": true
     }
   ]
 }

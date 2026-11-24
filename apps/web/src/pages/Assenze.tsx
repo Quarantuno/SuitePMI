@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { addDays, formatData, tipiAssenza, type Assenza, type AssenzaInput, type Persona, type TipoAssenza } from '@suite/shared';
+import { addDays, formatData, minutiPerGiorno, type Assenza, type AssenzaInput, type Persona, type TipoAssenza } from '@suite/shared';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { oreEMinuti } from '../presenze';
 import { Button, Empty, ErrorBox, Field, PageHeader, Select, fieldError } from '../ui';
 
 const tipi: Record<TipoAssenza, string> = { ferie: 'Ferie', permesso: 'Permesso' };
@@ -78,7 +79,7 @@ export function Assenze() {
                     <div className="num">{i + 1}</div>
                     {delGiorno.slice(0, 3).map((a) => (
                       <span className={a.tipo === 'ferie' ? 'badge badge-ok' : 'badge badge-info'} key={a.id}>
-                        {a.persona.nome} {a.persona.cognome}
+                        {a.persona.nome} {a.persona.cognome}{a.minuti !== undefined && ' · ' + oreEMinuti(a.minuti)}
                       </span>
                     ))}
                     {delGiorno.length > 3 && <span className="small">+{delGiorno.length - 3} persone</span>}
@@ -89,7 +90,7 @@ export function Assenze() {
             {assenze.data.length === 0 ? <Empty title="Nessuna assenza nel mese" /> : (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Persona</th><th>Tipo</th><th>Dal</th><th>Al</th><th>Azioni</th></tr></thead>
+                  <thead><tr><th>Persona</th><th>Tipo</th><th>Dal</th><th>Al</th><th>Durata</th><th>Azioni</th></tr></thead>
                   <tbody>
                     {assenze.data.map((a) => (
                       <tr key={a.id}>
@@ -97,6 +98,7 @@ export function Assenze() {
                         <td><span className={a.tipo === 'ferie' ? 'badge badge-ok' : 'badge badge-info'}>{tipi[a.tipo]}</span></td>
                         <td>{formatData(a.dal)}</td>
                         <td>{formatData(a.al)}</td>
+                        <td>{a.minuti === undefined ? 'Giornata intera' : oreEMinuti(a.minuti)}</td>
                         <td><Button variant="ghost" disabled={rimuovi.isPending}
                           onClick={() => window.confirm('Rimuovere questa registrazione dal calendario?') && rimuovi.mutate(a.id)}>Rimuovi</Button></td>
                       </tr>
@@ -114,6 +116,8 @@ export function Assenze() {
 
 function NuovaAssenza({ persone, mese, chiudi, salvata }:
   { persone: Persona[]; mese: string; chiudi: () => void; salvata: (a: Assenza) => void }) {
+  const [tipo, setTipo] = useState<TipoAssenza | 'permesso_orario'>('ferie');
+  const aOre = tipo === 'permesso_orario';
   const cache = useQueryClient();
   const salva = useMutation({
     mutationFn: (body: AssenzaInput) => api<Assenza>('/personale/assenze', { body }),
@@ -129,13 +133,13 @@ function NuovaAssenza({ persone, mese, chiudi, salvata }:
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const dati = new FormData(e.currentTarget);
-    const tipo = tipiAssenza.find((value) => value === dati.get('tipo'));
-    if (!tipo) return;
+    const dal = String(dati.get('dal'));
     salva.mutate({
       personaId: String(dati.get('personaId')),
-      tipo,
-      dal: String(dati.get('dal')),
-      al: String(dati.get('al')),
+      tipo: tipo === 'ferie' ? 'ferie' : 'permesso',
+      dal,
+      al: aOre ? dal : String(dati.get('al')),
+      ...(aOre ? { minuti: Number(dati.get('minuti')) } : {}),
     });
   }
 
@@ -147,9 +151,20 @@ function NuovaAssenza({ persone, mese, chiudi, salvata }:
           <option value="" disabled>Seleziona una persona</option>
           {persone.map((p) => <option key={p.id} value={p.id}>{p.cognome} {p.nome} · {p.mansione}</option>)}
         </Select>
-        <Select label="Tipo" name="tipo">{tipiAssenza.map((tipo) => <option key={tipo} value={tipo}>{tipi[tipo]}</option>)}</Select>
-        <Field label="Dal" type="date" name="dal" defaultValue={mese + '-01'} required />
-        <Field label="Al (compreso)" type="date" name="al" defaultValue={mese + '-01'} required error={fieldError(salva.error, 'al')} />
+        <Select label="Tipo" name="tipo" value={tipo} onChange={(e) => {
+          const valore = e.currentTarget.value;
+          if (valore === 'ferie' || valore === 'permesso' || valore === 'permesso_orario') setTipo(valore);
+        }}>
+          <option value="ferie">Ferie</option>
+          <option value="permesso">Permesso a giornata intera</option>
+          <option value="permesso_orario">Permesso a ore</option>
+        </Select>
+        <Field label={aOre ? 'Giorno' : 'Dal'} type="date" name="dal" defaultValue={mese + '-01'} required />
+        {aOre
+          ? <Field key="minuti" label="Durata (minuti)" type="number" name="minuti" min={1} max={minutiPerGiorno - 1}
+              step={1} required error={fieldError(salva.error, 'minuti')} />
+          : <Field key="al" label="Al (compreso)" type="date" name="al" defaultValue={mese + '-01'}
+              required error={fieldError(salva.error, 'al')} />}
       </div>
       <ErrorBox error={salva.error} />
       <div className="form-actions">

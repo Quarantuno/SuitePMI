@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
-  addDays, saldoPaghe, type Assenza, type AssenzaInput, type ContrattoLavoro, type ContrattoLavoroInput,
+  addDays, minutiPerGiorno, saldoPaghe, type Assenza, type AssenzaInput, type ContrattoLavoro, type ContrattoLavoroInput,
   type ContrattoLavoroSintesi, type Persona, type PersonaInput, type Presenza, type PresenzaInput, type ProspettoPaghe,
   type ProspettoPagheInput, type RiepilogoPaghe, type StatoPersona,
 } from '@suite/shared';
@@ -46,6 +46,12 @@ function limitiMese(mese: string) {
   const inizio = mese + '-01';
   const ultimoGiorno = new Date(Date.UTC(anno!, numeroMese!, 0)).getUTCDate();
   return { inizio, fine: addDays(inizio, ultimoGiorno - 1) };
+}
+
+function verificaDurataGiornaliera(presenza: Pick<PresenzaInput, 'minutiOrdinari' | 'minutiStraordinari'>, minutiPermesso: number) {
+  if (presenza.minutiOrdinari + presenza.minutiStraordinari + minutiPermesso > minutiPerGiorno) {
+    throw new ConflictException('La somma di presenza e permesso supera le 24 ore della giornata');
+  }
 }
 
 @Injectable()
@@ -94,17 +100,22 @@ export class PersonaleService {
 
   calendario(user: SessionUser, mese: string): Promise<Assenza[]> {
     const { inizio, fine } = limitiMese(mese);
-    return this.perTitolari(user, (tx) => tx.select({
-      id: assenze.id,
-      personaId: assenze.personaId,
-      tipo: assenze.tipo,
-      dal: assenze.dal,
-      al: assenze.al,
-      persona: { nome: personale.nome, cognome: personale.cognome },
-    }).from(assenze)
-      .innerJoin(personale, eq(assenze.personaId, personale.id))
-      .where(and(lte(assenze.dal, fine), gte(assenze.al, inizio)))
-      .orderBy(asc(assenze.dal), asc(personale.cognome), asc(assenze.id)));
+    return this.perTitolari(user, async (tx) => {
+      const righe = await tx.select({
+        id: assenze.id,
+        personaId: assenze.personaId,
+        tipo: assenze.tipo,
+        dal: assenze.dal,
+        al: assenze.al,
+        minuti: assenze.minuti,
+        persona: { nome: personale.nome, cognome: personale.cognome },
+      }).from(assenze)
+        .innerJoin(personale, eq(assenze.personaId, personale.id))
+        .where(and(lte(assenze.dal, fine), gte(assenze.al, inizio)))
+        .orderBy(asc(assenze.dal), asc(personale.cognome), asc(assenze.id));
+      // Le assenze a giornata intera mantengono la risposta senza il campo minuti.
+      return righe.map(({ minuti, ...riga }) => minuti === null ? riga : { ...riga, minuti });
+    });
   }
 
   registraAssenza(user: SessionUser, input: AssenzaInput): Promise<Assenza> {
@@ -120,12 +131,18 @@ export class PersonaleService {
       )).limit(1);
       if (sovrapposta) throw new ConflictException('La persona ha già un’assenza in questo periodo');
 
-      const [presenza] = await tx.select({ id: presenze.id }).from(presenze).where(and(
+      const [presenza] = await tx.select({
+        minutiOrdinari: presenze.minutiOrdinari,
+        minutiStraordinari: presenze.minutiStraordinari,
+      }).from(presenze).where(and(
         eq(presenze.personaId, input.personaId),
         gte(presenze.giorno, input.dal),
         lte(presenze.giorno, input.al),
       )).limit(1);
-      if (presenza) throw new ConflictException('La persona ha già una presenza in questo periodo');
+      if (presenza) {
+        if (input.minuti === undefined) throw new ConflictException('La persona ha già una presenza in questo periodo');
+        verificaDurataGiornaliera(presenza, input.minuti);
+      }
 
       const [creata] = await tx.insert(assenze).values({ ...input, aziendaId: user.aziendaId })
         .returning({ id: assenze.id });
@@ -163,10 +180,13 @@ export class PersonaleService {
         throw new BadRequestException('La presenza deve rientrare nelle date di ingresso e uscita');
       }
 
-      const [assenza] = await tx.select({ id: assenze.id }).from(assenze).where(and(
+      const [assenza] = await tx.select({ minuti: assenze.minuti }).from(assenze).where(and(
         eq(assenze.personaId, personaId), lte(assenze.dal, giorno), gte(assenze.al, giorno),
       )).limit(1);
-      if (assenza) throw new ConflictException('La persona ha già un’assenza per questa giornata');
+      if (assenza) {
+        if (assenza.minuti === null) throw new ConflictException('La persona ha già un’assenza a giornata intera');
+        verificaDurataGiornaliera(durata, assenza.minuti);
+      }
 
       const [salvata] = id
         ? await tx.update(presenze).set(durata).where(and(
@@ -208,7 +228,8 @@ export class PersonaleService {
       const assenzeMese = tx.select({
         personaId: assenze.personaId,
         ferie: sql`sum(${giorniNelMese}) filter (where ${assenze.tipo} = 'ferie')`.as('ferie'),
-        permessi: sql`sum(${giorniNelMese}) filter (where ${assenze.tipo} = 'permesso')`.as('permessi'),
+        permessi: sql`sum(${giorniNelMese}) filter (where ${assenze.tipo} = 'permesso' and ${assenze.minuti} is null)`.as('permessi'),
+        minutiPermesso: sql`sum(${assenze.minuti})`.as('minuti_permesso'),
       }).from(assenze)
         .where(and(lte(assenze.dal, fine), gte(assenze.al, inizio)))
         .groupBy(assenze.personaId)
@@ -225,6 +246,7 @@ export class PersonaleService {
         minutiStraordinari: sql`coalesce(${ore.straordinari}, 0)`.mapWith(Number),
         giorniFerie: sql`coalesce(${assenzeMese.ferie}, 0)`.mapWith(Number),
         giorniPermesso: sql`coalesce(${assenzeMese.permessi}, 0)`.mapWith(Number),
+        minutiPermesso: sql`coalesce(${assenzeMese.minutiPermesso}, 0)`.mapWith(Number),
       }).from(personale)
         .leftJoin(ore, eq(ore.personaId, personale.id))
         .leftJoin(assenzeMese, eq(assenzeMese.personaId, personale.id))
